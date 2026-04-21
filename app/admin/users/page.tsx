@@ -1,0 +1,533 @@
+"use client";
+
+import { useEffect, useState, type FormEvent } from "react";
+import { Edit3, Loader2, Save, Trash2, X } from "lucide-react";
+import { AdminHeader } from "../../../components/admin/AdminHeader";
+import { Card, CardContent } from "../../../components/ui/Card";
+import { useUserStore } from "../../../store/useUserStore";
+import { calculateBasicFluidNeeds } from "../../../utils/hydrationCalc";
+import { createClient } from "../../../utils/supabase/client";
+
+type UserRole = "student" | "parent" | "admin";
+type StudentGender = "male" | "female";
+
+type StudentProfile = {
+  id: string;
+  birth_date: string | null;
+  gender: StudentGender | null;
+  weight_kg: number | null;
+  height_cm: number | null;
+  daily_water_target_ml: number | null;
+  student_code?: string | null;
+};
+
+type AdminUser = {
+  id: string;
+  role: UserRole;
+  full_name: string | null;
+  email: string | null;
+  created_at: string;
+  student_profiles?: StudentProfile | null;
+};
+
+type EditFormData = {
+  full_name: string;
+  email: string;
+  role: UserRole;
+  birth_date: string;
+  gender: StudentGender;
+  weight_kg: string;
+  height_cm: string;
+  daily_water_target_ml: string;
+};
+
+const roleLabels: Record<UserRole, string> = {
+  student: "Siswa",
+  parent: "Orang Tua",
+  admin: "Admin",
+};
+
+function generateStudentCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+function toNullableNumber(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export default function AdminUsersPage() {
+  const { profile: currentProfile } = useUserStore();
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterRole, setFilterRole] = useState<"all" | UserRole>("all");
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [editFormData, setEditFormData] = useState<EditFormData>({
+    full_name: "",
+    email: "",
+    role: "student",
+    birth_date: "",
+    gender: "male",
+    weight_kg: "",
+    height_cm: "",
+    daily_water_target_ml: "",
+  });
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function fetchUsers() {
+      const supabase = createClient();
+
+      try {
+        let query = supabase
+          .from("profiles")
+          .select(`
+            id,
+            role,
+            full_name,
+            email,
+            created_at
+          `)
+          .order("created_at", { ascending: false });
+
+        if (filterRole !== "all") {
+          query = query.eq("role", filterRole);
+        }
+
+        const { data: profilesData, error: profilesError } = await query;
+        if (profilesError) throw profilesError;
+
+        const typedProfiles = (profilesData || []) as AdminUser[];
+        const studentIds = typedProfiles.filter((profile) => profile.role === "student").map((profile) => profile.id);
+
+        if (studentIds.length === 0) {
+          if (isActive) setUsers(typedProfiles);
+          return;
+        }
+
+        const { data: studentData, error: studentError } = await supabase
+          .from("student_profiles")
+          .select("*")
+          .in("id", studentIds);
+
+        if (studentError) throw studentError;
+
+        const studentMap = ((studentData || []) as StudentProfile[]).reduce<Record<string, StudentProfile>>((acc, studentProfile) => {
+          acc[studentProfile.id] = studentProfile;
+          return acc;
+        }, {});
+
+        const merged = typedProfiles.map((profile) => ({
+          ...profile,
+          student_profiles: studentMap[profile.id] || null,
+        }));
+
+        if (isActive) setUsers(merged);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      } finally {
+        if (isActive) setLoading(false);
+      }
+    }
+
+    fetchUsers();
+
+    return () => {
+      isActive = false;
+    };
+  }, [filterRole, refreshToken]);
+
+  const refreshUsers = () => {
+    setLoading(true);
+    setRefreshToken((token) => token + 1);
+  };
+
+  const handleFilterChange = (nextRole: "all" | UserRole) => {
+    setLoading(true);
+    setFilterRole(nextRole);
+  };
+
+  const handleOpenEdit = (user: AdminUser) => {
+    const weight = user.student_profiles?.weight_kg;
+    const defaultTarget = weight ? calculateBasicFluidNeeds(weight) : "";
+
+    setEditingUser(user);
+    setEditFormData({
+      full_name: user.full_name || "",
+      email: user.email || "",
+      role: user.role,
+      birth_date: user.student_profiles?.birth_date || "",
+      gender: user.student_profiles?.gender || "male",
+      weight_kg: weight ? String(weight) : "",
+      height_cm: user.student_profiles?.height_cm ? String(user.student_profiles.height_cm) : "",
+      daily_water_target_ml: user.student_profiles?.daily_water_target_ml
+        ? String(user.student_profiles.daily_water_target_ml)
+        : String(defaultTarget),
+    });
+  };
+
+  const handleCloseEdit = () => {
+    if (isEditSubmitting) return;
+    setEditingUser(null);
+  };
+
+  const handleEditSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingUser) return;
+
+    setIsEditSubmitting(true);
+    const supabase = createClient();
+
+    try {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          full_name: editFormData.full_name.trim() || null,
+          email: editFormData.email.trim() || null,
+          role: editFormData.role,
+        })
+        .eq("id", editingUser.id);
+
+      if (profileError) throw profileError;
+
+      if (editFormData.role === "student") {
+        const weight = toNullableNumber(editFormData.weight_kg);
+        const calculatedTarget = weight ? calculateBasicFluidNeeds(weight) : null;
+        const target = toNullableNumber(editFormData.daily_water_target_ml) || calculatedTarget;
+
+        const { error: studentError } = await supabase
+          .from("student_profiles")
+          .upsert({
+            id: editingUser.id,
+            birth_date: editFormData.birth_date || null,
+            gender: editFormData.gender,
+            weight_kg: weight,
+            height_cm: toNullableNumber(editFormData.height_cm),
+            daily_water_target_ml: target,
+            student_code: editingUser.student_profiles?.student_code || generateStudentCode(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (studentError) throw studentError;
+      }
+
+      setEditingUser(null);
+      refreshUsers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan pengguna.";
+      alert(`Gagal menyimpan pengguna: ${message}`);
+    } finally {
+      setIsEditSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (user: AdminUser) => {
+    if (user.id === currentProfile?.id) {
+      alert("Akun admin yang sedang digunakan tidak bisa dihapus dari halaman ini.");
+      return;
+    }
+
+    const confirmed = confirm(`Hapus pengguna "${user.full_name || user.email || "Tanpa Nama"}" dari aplikasi? Data profil dan relasi terkait akan dihapus.`);
+    if (!confirmed) return;
+
+    setDeletingUserId(user.id);
+    const supabase = createClient();
+
+    try {
+      const deleteRows = async (tableName: string, columnName: string) => {
+        const { error } = await supabase.from(tableName).delete().eq(columnName, user.id);
+        if (error) throw error;
+      };
+
+      if (user.role === "student") {
+        await deleteRows("child_notifications", "child_id");
+        await deleteRows("parent_children", "child_id");
+        await deleteRows("hydration_logs", "student_id");
+        await deleteRows("survey_responses", "student_id");
+        await deleteRows("student_profiles", "id");
+      }
+
+      if (user.role === "parent") {
+        await deleteRows("child_notifications", "parent_id");
+        await deleteRows("parent_children", "parent_id");
+      }
+
+      await deleteRows("survey_responses", "respondent_id");
+
+      const { error: profileError } = await supabase.from("profiles").delete().eq("id", user.id);
+      if (profileError) throw profileError;
+
+      setUsers((currentUsers) => currentUsers.filter((currentUser) => currentUser.id !== user.id));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Terjadi kesalahan saat menghapus pengguna.";
+      alert(`Gagal menghapus pengguna: ${message}`);
+      refreshUsers();
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  return (
+    <>
+      <AdminHeader title="Manajemen Pengguna" />
+      <div className="p-8">
+        <Card className="border-0 shadow-md">
+          <CardContent className="p-0">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-xl">
+              <h2 className="text-lg font-bold text-slate-800">Daftar Pengguna</h2>
+              <select
+                className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
+                value={filterRole}
+                onChange={(event) => handleFilterChange(event.target.value as "all" | UserRole)}
+              >
+                <option value="all">Semua Role</option>
+                <option value="student">Anak / Siswa</option>
+                <option value="parent">Orang Tua</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left text-slate-500">
+                <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-100">
+                  <tr>
+                    <th scope="col" className="px-6 py-4">Nama Lengkap</th>
+                    <th scope="col" className="px-6 py-4">Email</th>
+                    <th scope="col" className="px-6 py-4">Role</th>
+                    <th scope="col" className="px-6 py-4">Detail Tambahan</th>
+                    <th scope="col" className="px-6 py-4 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                        Memuat data pengguna...
+                      </td>
+                    </tr>
+                  ) : users.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                        Tidak ada pengguna ditemukan.
+                      </td>
+                    </tr>
+                  ) : (
+                    users.map((user) => (
+                      <tr key={user.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">
+                          {user.full_name || "-"}
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.email || "-"}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
+                            user.role === "student" ? "bg-blue-50 text-blue-600 border-blue-200" :
+                            user.role === "parent" ? "bg-teal-50 text-teal-600 border-teal-200" :
+                            "bg-purple-50 text-purple-600 border-purple-200"
+                          }`}>
+                            {roleLabels[user.role]}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.role === "student" && user.student_profiles ? (
+                            <div className="text-xs">
+                              {user.student_profiles.weight_kg || "-"} kg &bull; {user.student_profiles.height_cm || "-"} cm &bull; Target: {user.student_profiles.daily_water_target_ml || "-"}ml
+                            </div>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(user)}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100"
+                              title="Edit pengguna"
+                              aria-label={`Edit pengguna ${user.full_name || user.email || "tanpa nama"}`}
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(user)}
+                              disabled={deletingUserId === user.id}
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              title="Hapus pengguna"
+                              aria-label={`Hapus pengguna ${user.full_name || user.email || "tanpa nama"}`}
+                            >
+                              {deletingUserId === user.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-between items-center text-sm text-slate-500">
+              <span>Menampilkan {users.length} pengguna</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 p-5">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Edit Pengguna</h3>
+                <p className="text-xs text-slate-500">Perbarui profil aplikasi pengguna.</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseEdit}
+                className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Tutup modal edit"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit}>
+              <div className="max-h-[70vh] space-y-5 overflow-y-auto p-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Nama Lengkap</span>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      value={editFormData.full_name}
+                      onChange={(event) => setEditFormData({ ...editFormData, full_name: event.target.value })}
+                      placeholder="Nama pengguna"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Email</span>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      type="email"
+                      value={editFormData.email}
+                      onChange={(event) => setEditFormData({ ...editFormData, email: event.target.value })}
+                      placeholder="email@contoh.com"
+                    />
+                  </label>
+                </div>
+
+                <label className="block space-y-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Role</span>
+                  <select
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    value={editFormData.role}
+                    onChange={(event) => setEditFormData({ ...editFormData, role: event.target.value as UserRole })}
+                  >
+                    <option value="student">Siswa</option>
+                    <option value="parent">Orang Tua</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+
+                {editFormData.role === "student" && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                    <p className="mb-4 text-sm font-bold text-blue-700">Detail Siswa</p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Tanggal Lahir</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          type="date"
+                          value={editFormData.birth_date}
+                          onChange={(event) => setEditFormData({ ...editFormData, birth_date: event.target.value })}
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Jenis Kelamin</span>
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          value={editFormData.gender}
+                          onChange={(event) => setEditFormData({ ...editFormData, gender: event.target.value as StudentGender })}
+                        >
+                          <option value="male">Laki-laki</option>
+                          <option value="female">Perempuan</option>
+                        </select>
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Berat Badan (kg)</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          min="0"
+                          step="0.1"
+                          type="number"
+                          value={editFormData.weight_kg}
+                          onChange={(event) => {
+                            const nextWeight = event.target.value;
+                            const parsedWeight = toNullableNumber(nextWeight);
+                            setEditFormData({
+                              ...editFormData,
+                              weight_kg: nextWeight,
+                              daily_water_target_ml: parsedWeight ? String(calculateBasicFluidNeeds(parsedWeight)) : editFormData.daily_water_target_ml,
+                            });
+                          }}
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Tinggi Badan (cm)</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          min="0"
+                          step="0.1"
+                          type="number"
+                          value={editFormData.height_cm}
+                          onChange={(event) => setEditFormData({ ...editFormData, height_cm: event.target.value })}
+                        />
+                      </label>
+                      <label className="space-y-2 md:col-span-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">FBB / Kebutuhan Dasar (ml)</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          min="0"
+                          step="1"
+                          type="number"
+                          value={editFormData.daily_water_target_ml}
+                          onChange={(event) => setEditFormData({ ...editFormData, daily_water_target_ml: event.target.value })}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 border-t border-slate-100 bg-slate-50 p-5">
+                <button
+                  type="button"
+                  onClick={handleCloseEdit}
+                  disabled={isEditSubmitting}
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-60"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditSubmitting}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {isEditSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {isEditSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
