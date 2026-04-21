@@ -35,6 +35,56 @@ type ChildLink = {
   } | null;
 };
 
+type ChildLinkQueryRow = {
+  id: string;
+  child_id: string;
+  student_profiles: {
+    student_code: string | null;
+    weight_kg: number | null;
+    daily_water_target_ml: number | null;
+    profiles: {
+      full_name: string | null;
+    }[] | {
+      full_name: string | null;
+    } | null;
+  }[] | {
+    student_code: string | null;
+    weight_kg: number | null;
+    daily_water_target_ml: number | null;
+    profiles: {
+      full_name: string | null;
+    }[] | {
+      full_name: string | null;
+    } | null;
+  } | null;
+};
+
+const normalizeChildLinks = (rows: ChildLinkQueryRow[] | null): ChildLink[] => {
+  return (rows || []).map((row) => {
+    const rawStudentProfile = Array.isArray(row.student_profiles)
+      ? row.student_profiles[0]
+      : row.student_profiles;
+
+    const rawProfile = rawStudentProfile?.profiles;
+    const normalizedProfile = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
+
+    return {
+      id: row.id,
+      child_id: row.child_id,
+      student_profiles: rawStudentProfile
+        ? {
+            student_code: rawStudentProfile.student_code ?? null,
+            weight_kg: rawStudentProfile.weight_kg ?? null,
+            daily_water_target_ml: rawStudentProfile.daily_water_target_ml ?? null,
+            profiles: normalizedProfile
+              ? { full_name: normalizedProfile.full_name ?? null }
+              : null,
+          }
+        : null,
+    };
+  });
+};
+
 type HydrationHistoryItem = {
   id: string;
   amount_ml: number;
@@ -215,7 +265,7 @@ export default function DashboardPage() {
         .from('parent_children')
         .select('id, child_id, student_profiles:child_id(id, student_code, weight_kg, height_cm, daily_water_target_ml, profiles!student_profiles_id_fkey(full_name))')
         .eq('parent_id', profile.id);
-      setChildren(data || []);
+      setChildren(normalizeChildLinks((data as ChildLinkQueryRow[] | null) || null));
     }
     fetchChildren();
   }, [profile?.id, profile?.role]);
@@ -252,7 +302,7 @@ export default function DashboardPage() {
         .from('parent_children')
         .select('id, child_id, student_profiles:child_id(id, student_code, weight_kg, height_cm, daily_water_target_ml, profiles!student_profiles_id_fkey(full_name))')
         .eq('parent_id', profile.id);
-      setChildren(data || []);
+      setChildren(normalizeChildLinks((data as ChildLinkQueryRow[] | null) || null));
     } catch (err: unknown) {
       setChildError(err instanceof Error ? err.message : 'Terjadi kesalahan saat menambahkan anak.');
     } finally {

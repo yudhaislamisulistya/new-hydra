@@ -273,7 +273,7 @@ export default function ProfilePage() {
           <h2 className="text-2xl font-bold text-slate-800">{profile?.nickname || "User"}</h2>
           <p className="text-slate-500 font-medium capitalize flex items-center gap-1 mt-1">
             <ShieldCheck size={16} className="text-blue-500" />
-            {profile?.role === "parent" ? "Orang Tua" : profile?.role === "student" ? "Siswa" : profile?.role}
+            {profile?.role === "parent" ? "Orang Tua" : profile?.role}
           </p>
         </div>
 

@@ -1,6 +1,6 @@
 export type ActivityLevel = "rendah" | "sedang" | "tinggi";
 export type Gender = "L" | "P";
-export type LooseGender = Gender | "male" | "female" | null | undefined;
+export type LooseGender = string | null | undefined;
 
 export interface HydrationParams {
   weight_kg: number;

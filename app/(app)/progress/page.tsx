@@ -83,7 +83,7 @@ export default function ProgressPage() {
         .eq('parent_id', profile.id);
 
       if (data && data.length > 0) {
-        setChildren((data as ChildProgressRow[]) || []);
+        setChildren((data as unknown as ChildProgressRow[]) || []);
         setSelectedChildId(data[0].child_id);
       } else {
         setLoading(false);
@@ -139,7 +139,7 @@ export default function ProgressPage() {
         .order('submitted_at', { ascending: false });
 
       setHydrationLogs(logs || []);
-      setSurveyResponses((surveys as SurveyProgressResponse[]) || []);
+      setSurveyResponses((surveys as unknown as SurveyProgressResponse[]) || []);
       setLoading(false);
     }
 
