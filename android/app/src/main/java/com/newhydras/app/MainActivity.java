@@ -1,5 +1,6 @@
-package com.newhydras.app;
+package id.sivia.new_hydra;
 
 import com.getcapacitor.BridgeActivity;
 
-public class MainActivity extends BridgeActivity {}
+public class MainActivity extends BridgeActivity {
+}
