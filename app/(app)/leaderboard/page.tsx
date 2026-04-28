@@ -5,20 +5,46 @@ import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/supabase/client";
-import { Trophy, Zap, Droplet, ClipboardList, Medal, Crown, Star } from "lucide-react";
+import { XP_PER_SURVEY, XP_PER_HYDRATION_LOG } from "../../../utils/gamification";
+import { Trophy, Zap, Droplet, ClipboardList, Medal, Crown } from "lucide-react";
 
 // XP Rules:
 // - Each survey/quiz completed = 100 XP
 // - Each hydration log entry = 10 XP
+// - Each daily check-in gives progressive XP based on streak
 
 interface LeaderboardEntry {
   id: string;
   name: string;
   surveyCount: number;
   hydrationCount: number;
+  checkinCount: number;
+  checkinXp: number;
   totalXP: number;
   rank: number;
 }
+
+type StudentLeaderboardRow = {
+  id: string;
+  profiles: {
+    full_name: string | null;
+  }[] | {
+    full_name: string | null;
+  } | null;
+};
+
+type SurveyResponseCountRow = {
+  respondent_id: string;
+};
+
+type HydrationLogCountRow = {
+  student_id: string;
+};
+
+type DailyCheckinXpRow = {
+  student_id: string;
+  xp_earned: number | null;
+};
 
 export default function LeaderboardPage() {
   const { profile } = useUserStore();
@@ -50,32 +76,50 @@ export default function LeaderboardPage() {
         .from('hydration_logs')
         .select('student_id');
 
-      // 4. Count per student
+      // 4. Get all daily check-ins
+      const { data: dailyCheckins } = await supabase
+        .from('daily_checkins')
+        .select('student_id, xp_earned');
+
+      // 5. Count per student
       const surveyCounts: Record<string, number> = {};
-      (surveyResponses || []).forEach((r: any) => {
+      ((surveyResponses as SurveyResponseCountRow[] | null) || []).forEach((r) => {
         surveyCounts[r.respondent_id] = (surveyCounts[r.respondent_id] || 0) + 1;
       });
 
       const hydrationCounts: Record<string, number> = {};
-      (hydrationLogs || []).forEach((l: any) => {
+      ((hydrationLogs as HydrationLogCountRow[] | null) || []).forEach((l) => {
         hydrationCounts[l.student_id] = (hydrationCounts[l.student_id] || 0) + 1;
       });
 
-      // 5. Build leaderboard
-      const entries: LeaderboardEntry[] = students.map((s: any) => {
+      const checkinCounts: Record<string, number> = {};
+      const checkinXpTotals: Record<string, number> = {};
+      ((dailyCheckins as DailyCheckinXpRow[] | null) || []).forEach((c) => {
+        checkinCounts[c.student_id] = (checkinCounts[c.student_id] || 0) + 1;
+        checkinXpTotals[c.student_id] = (checkinXpTotals[c.student_id] || 0) + (c.xp_earned || 0);
+      });
+
+      // 6. Build leaderboard
+      const entries: LeaderboardEntry[] = ((students as StudentLeaderboardRow[] | null) || []).map((s) => {
+        const rawProfile = s.profiles;
+        const profileRow = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
         const surveyCount = surveyCounts[s.id] || 0;
         const hydrationCount = hydrationCounts[s.id] || 0;
+        const checkinCount = checkinCounts[s.id] || 0;
+        const checkinXp = checkinXpTotals[s.id] || 0;
         return {
           id: s.id,
-          name: s.profiles?.full_name || 'Siswa',
+          name: profileRow?.full_name || 'Siswa',
           surveyCount,
           hydrationCount,
-          totalXP: (surveyCount * 100) + (hydrationCount * 10),
+          checkinCount,
+          checkinXp,
+          totalXP: (surveyCount * XP_PER_SURVEY) + (hydrationCount * XP_PER_HYDRATION_LOG) + checkinXp,
           rank: 0,
         };
       });
 
-      // 6. Sort by XP descending
+      // 7. Sort by XP descending
       entries.sort((a, b) => b.totalXP - a.totalXP);
       entries.forEach((e, i) => { e.rank = i + 1; });
 
@@ -146,14 +190,14 @@ export default function LeaderboardPage() {
         </Card>
 
         {/* XP Info */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="bg-blue-50 rounded-2xl p-3 flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center">
               <ClipboardList size={16} className="text-blue-600" />
             </div>
             <div>
               <p className="text-[10px] font-bold text-blue-400 uppercase">Kuis / Survei</p>
-              <p className="text-sm font-black text-blue-700">+100 XP</p>
+              <p className="text-sm font-black text-blue-700">+{XP_PER_SURVEY} XP</p>
             </div>
           </div>
           <div className="bg-cyan-50 rounded-2xl p-3 flex items-center gap-3">
@@ -162,7 +206,16 @@ export default function LeaderboardPage() {
             </div>
             <div>
               <p className="text-[10px] font-bold text-cyan-400 uppercase">Catat Minum</p>
-              <p className="text-sm font-black text-cyan-700">+10 XP</p>
+              <p className="text-sm font-black text-cyan-700">+{XP_PER_HYDRATION_LOG} XP</p>
+            </div>
+          </div>
+          <div className="bg-amber-50 rounded-2xl p-3 flex items-center gap-3">
+            <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center">
+              <Zap size={16} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-amber-400 uppercase">Daily Check-In</p>
+              <p className="text-sm font-black text-amber-700">+20 s/d +50 XP</p>
             </div>
           </div>
         </div>
@@ -209,6 +262,9 @@ export default function LeaderboardPage() {
                         </span>
                         <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
                           <Droplet size={10} /> {entry.hydrationCount} minum
+                        </span>
+                        <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
+                          <Zap size={10} /> {entry.checkinCount} check-in
                         </span>
                       </div>
                     </div>

@@ -30,6 +30,7 @@ type DashboardStats = {
   totalStudents: number;
   totalParents: number;
   totalAdmins: number;
+  totalTeachers: number;
   totalSurveys: number;
   todayHydration: number;
   totalLogsToday: number;
@@ -56,6 +57,7 @@ const defaultStats: DashboardStats = {
   totalStudents: 0,
   totalParents: 0,
   totalAdmins: 0,
+  totalTeachers: 0,
   totalSurveys: 0,
   todayHydration: 0,
   totalLogsToday: 0,
@@ -87,6 +89,7 @@ export default function AdminDashboardPage() {
           { count: studentsCount },
           { count: parentsCount },
           { count: adminsCount },
+          { count: teachersCount },
           { count: surveysCount },
           { data: recentData },
           { data: studentProfiles },
@@ -97,6 +100,7 @@ export default function AdminDashboardPage() {
           supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student"),
           supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "parent"),
           supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "admin"),
+          supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "teacher"),
           supabase.from("surveys").select("*", { count: "exact", head: true }),
           supabase.from("profiles").select("id, full_name, role").order("created_at", { ascending: false }).limit(4),
           supabase.from("student_profiles").select("id, weight_kg, gender"),
@@ -125,6 +129,7 @@ export default function AdminDashboardPage() {
           totalStudents: studentsCount || 0,
           totalParents: parentsCount || 0,
           totalAdmins: adminsCount || 0,
+          totalTeachers: teachersCount || 0,
           totalSurveys: surveysCount || 0,
           todayHydration: totalHydrationToday,
           totalLogsToday: todayLogRows.length,
@@ -192,8 +197,16 @@ export default function AdminDashboardPage() {
   const roleDistributionData: DistributionDatum[] = [
     { name: "Siswa", total: stats.totalStudents, fill: "#3b82f6" },
     { name: "Ortu", total: stats.totalParents, fill: "#14b8a6" },
-    { name: "Admin", total: stats.totalAdmins, fill: "#8b5cf6" },
+    { name: "Guru", total: stats.totalTeachers, fill: "#8b5cf6" },
+    { name: "Admin", total: stats.totalAdmins, fill: "#f59e0b" },
   ];
+
+  const roleLabelMap: Record<string, string> = {
+    student: "Siswa",
+    parent: "Orang Tua",
+    teacher: "Guru",
+    admin: "Admin",
+  };
 
   return (
     <>
@@ -211,7 +224,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs text-slate-400 mt-1">
                   {loading
                     ? "-"
-                    : `${stats.totalStudents} Siswa, ${stats.totalParents} Ortu, ${stats.totalAdmins} Admin`}
+                    : `${stats.totalStudents} Siswa, ${stats.totalParents} Ortu, ${stats.totalTeachers} Guru, ${stats.totalAdmins} Admin`}
                 </p>
               </div>
             </CardContent>
@@ -406,7 +419,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-slate-800 truncate">{user.full_name || "Tanpa Nama"}</p>
-                      <p className="text-xs text-slate-500 capitalize">{user.role}</p>
+                      <p className="text-xs text-slate-500">{roleLabelMap[user.role || ""] || user.role || "-"}</p>
                     </div>
                   </div>
                 ))}

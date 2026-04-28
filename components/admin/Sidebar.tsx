@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, ClipboardList, Activity, Droplets, PlaySquare } from "lucide-react";
+import { LayoutDashboard, Users, ClipboardList, Activity, Droplets, PlaySquare, School2 } from "lucide-react";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/users", label: "Daftar User", icon: Users },
   { href: "/admin/quizzes", label: "Kuis", icon: ClipboardList },
   { href: "/admin/education", label: "Edukasi & Video", icon: PlaySquare },
+  { href: "/admin/schools", label: "Sekolah", icon: School2 },
   { href: "/admin/activity", label: "Aktivitas Minum", icon: Activity },
 ];
 
@@ -43,7 +44,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
-        &copy; 2026 New-Hydras
+        &copy; 2026 New Hydra
       </div>
     </aside>
   );

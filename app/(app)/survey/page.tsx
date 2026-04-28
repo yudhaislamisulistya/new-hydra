@@ -5,19 +5,47 @@ import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { ProgressBar } from "../../../components/ui/ProgressBar";
-import { CheckCircle2, ClipboardList, Loader2 } from "lucide-react";
+import { CheckCircle2, ClipboardList } from "lucide-react";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/supabase/client";
 
+type QuizSummary = {
+  id: string;
+  title: string;
+  description: string | null;
+  target_role: string | null;
+  survey_type: string | null;
+};
+
+type SurveyResponseRow = {
+  survey_id: string;
+  submitted_at: string;
+};
+
+type SurveyQuestionRow = {
+  id: string;
+  question_text: string;
+  question_type: string;
+  options: string[] | null;
+  order_number: number;
+};
+
+const REQUIRED_DAILY_QUIZ_TYPES = new Set(["sikap", "pengetahuan"]);
+
+function isRequiredDailyQuiz(quiz: QuizSummary) {
+  const normalizedTitle = quiz.title.toLowerCase();
+  return REQUIRED_DAILY_QUIZ_TYPES.has(quiz.survey_type || "") && normalizedTitle.includes("dehidrasi");
+}
+
 export default function SurveyPage() {
   const { profile } = useUserStore();
-  const [surveys, setSurveys] = useState<any[]>([]);
+  const [surveys, setSurveys] = useState<QuizSummary[]>([]);
   const [todayResponseIds, setTodayResponseIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   // Quiz mode state
-  const [activeSurvey, setActiveSurvey] = useState<any>(null);
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [activeSurvey, setActiveSurvey] = useState<QuizSummary | null>(null);
+  const [questions, setQuestions] = useState<SurveyQuestionRow[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loadingQuiz, setLoadingQuiz] = useState(false);
@@ -39,7 +67,14 @@ export default function SurveyPage() {
           .order('created_at', { ascending: false });
 
         if (survError) throw survError;
-        setSurveys(surveysData || []);
+        const quizItems = ((surveysData as QuizSummary[] | null) || [])
+          .filter(isRequiredDailyQuiz)
+          .sort((a, b) => {
+            const priority = { pengetahuan: 0, sikap: 1 };
+            return (priority[a.survey_type as keyof typeof priority] ?? 99) - (priority[b.survey_type as keyof typeof priority] ?? 99);
+          });
+
+        setSurveys(quizItems);
 
         // 2. Fetch today's responses for this student
         const today = new Date();
@@ -53,9 +88,7 @@ export default function SurveyPage() {
 
         if (resError) throw resError;
 
-        const completedIds = new Set<string>(
-          (responsesData || []).map((r: any) => r.survey_id)
-        );
+        const completedIds = new Set<string>(((responsesData as SurveyResponseRow[] | null) || []).map((r) => r.survey_id));
         setTodayResponseIds(completedIds);
 
       } catch (err) {
@@ -68,7 +101,7 @@ export default function SurveyPage() {
     fetchData();
   }, [profile?.id]);
 
-  const handleStartSurvey = async (survey: any) => {
+  const handleStartSurvey = async (survey: QuizSummary) => {
     setLoadingQuiz(true);
     const supabase = createClient();
 
@@ -87,7 +120,7 @@ export default function SurveyPage() {
         return;
       }
 
-      setQuestions(data);
+      setQuestions((data as SurveyQuestionRow[] | null) || []);
       setActiveSurvey(survey);
       setCurrentIndex(0);
       setAnswers({});
@@ -111,23 +144,6 @@ export default function SurveyPage() {
     }
   };
 
-  const handleTextAnswer = (questionId: string, text: string) => {
-    setAnswers({ ...answers, [questionId]: text });
-  };
-
-  const submitTextAndNext = () => {
-    const currentQ = questions[currentIndex];
-    if (!answers[currentQ.id]) {
-      alert("Tulis jawaban kamu terlebih dahulu.");
-      return;
-    }
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      submitResponses(answers);
-    }
-  };
-
   const submitResponses = async (finalAnswers: Record<string, string>) => {
     if (!profile?.id || !activeSurvey) return;
     setSubmitting(true);
@@ -135,8 +151,8 @@ export default function SurveyPage() {
 
     try {
       // Build answers payload: { question_id: { question_text, answer } }
-      const answersPayload: Record<string, any> = {};
-      questions.forEach(q => {
+      const answersPayload: Record<string, { question_text: string; answer: string }> = {};
+      questions.forEach((q) => {
         answersPayload[q.id] = {
           question_text: q.question_text,
           answer: finalAnswers[q.id] || '',
@@ -157,9 +173,9 @@ export default function SurveyPage() {
       // Mark this survey as completed today
       setTodayResponseIds(prev => new Set(prev).add(activeSurvey.id));
       setShowResult(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error submitting response:", err);
-      alert(`Gagal mengirim jawaban: ${err.message}`);
+      alert(`Gagal mengirim jawaban: ${err instanceof Error ? err.message : "Terjadi kesalahan."}`);
     } finally {
       setSubmitting(false);
     }
@@ -198,7 +214,7 @@ export default function SurveyPage() {
     const scoreResult = getScoreResult();
     return (
       <>
-        <Header title="Hasil Survei" />
+        <Header title="Hasil Kuis" />
         <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
           <div className="w-28 h-28 bg-green-100 rounded-full flex items-center justify-center mb-6 relative">
             <div className="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-20" />
@@ -232,7 +248,7 @@ export default function SurveyPage() {
             Kuis ini bisa dikerjakan lagi besok.
           </p>
           <Button onClick={handleBackToList} variant="outline" className="w-full max-w-xs">
-            Kembali ke Menu Survei
+            Kembali ke Menu Kuis
           </Button>
         </div>
       </>
@@ -263,21 +279,7 @@ export default function SurveyPage() {
           </Card>
 
           <div className="grid gap-3 mt-6">
-            {currentQ.question_type === 'text' && activeSurvey.survey_type === 'survey' ? (
-              <div className="space-y-3">
-                <textarea
-                  className="w-full border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  rows={4}
-                  placeholder="Tulis jawaban kamu di sini..."
-                  value={answers[currentQ.id] || ""}
-                  onChange={(e) => handleTextAnswer(currentQ.id, e.target.value)}
-                ></textarea>
-                <Button onClick={submitTextAndNext} className="w-full" disabled={submitting}>
-                  {currentIndex < questions.length - 1 ? "Lanjut" : (submitting ? "Mengirim..." : "Selesai & Kirim")}
-                </Button>
-              </div>
-            ) : (() => {
-              // Always use question options from admin
+            {(() => {
               const options: string[] = Array.isArray(currentQ.options) ? currentQ.options : [];
 
               return options.map((opt: string, idx: number) => (
@@ -300,12 +302,12 @@ export default function SurveyPage() {
   // ── LIST SCREEN ──
   return (
     <>
-      <Header title="Survei" />
+      <Header title="Kuis" />
       <div className="p-6 space-y-6 pb-24">
         <div className="mb-2">
-          <h2 className="font-extrabold text-slate-800 text-xl">Kuis & Survei</h2>
+          <h2 className="font-extrabold text-slate-800 text-xl">Kuis Harian</h2>
           <p className="text-slate-500 text-sm mt-1">
-            Ayo isi kuis di bawah ini untuk menguji pemahamanmu tentang hidrasi!
+            Yang ditampilkan di sini hanya Kuis Sikap Dehidrasi dan Kuis Pengetahuan Dehidrasi.
           </p>
         </div>
 

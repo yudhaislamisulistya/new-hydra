@@ -60,7 +60,12 @@ export function Header({ title }: { title: string }) {
     <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 h-16 px-6 flex items-center justify-between">
       <h1 className="text-xl font-bold text-slate-800">{title}</h1>
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => router.push("/profile")}
+          className="flex items-center gap-3 rounded-2xl px-2 py-1.5 transition-colors hover:bg-slate-50"
+          title="Buka profil"
+        >
           <div className="flex flex-col items-end">
             <span className="text-sm font-semibold text-slate-700">{profile?.nickname || "User"}</span>
             <span className="text-[10px] text-slate-400 uppercase tracking-wider">{profile?.role || "GUEST"}</span>
@@ -68,7 +73,7 @@ export function Header({ title }: { title: string }) {
           <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 font-bold border-2 border-white shadow-sm overflow-hidden">
             {profile?.nickname ? profile.nickname.charAt(0).toUpperCase() : "U"}
           </div>
-        </div>
+        </button>
         {profile?.role === "student" && (
           <button
             onClick={() => router.push("/notifications")}

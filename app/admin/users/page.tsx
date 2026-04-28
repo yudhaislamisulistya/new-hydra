@@ -6,10 +6,12 @@ import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
 import { calculateBasicFluidNeeds } from "../../../utils/hydrationCalc";
+import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, PARENT_EDUCATION_OPTIONS, PARENT_GENDER_OPTIONS } from "../../../utils/parentProfile";
 import { createClient } from "../../../utils/supabase/client";
 
-type UserRole = "student" | "parent" | "admin";
+type UserRole = "student" | "parent" | "admin" | "teacher";
 type StudentGender = "male" | "female";
+type SchoolOption = { value: string; label: string };
 
 type StudentProfile = {
   id: string;
@@ -21,6 +23,31 @@ type StudentProfile = {
   student_code?: string | null;
 };
 
+type TeacherProfile = {
+  id: string;
+  school_id: string | null;
+  employee_number: string | null;
+  full_title: string | null;
+  gender: StudentGender | null;
+  phone: string | null;
+  schools?: {
+    name: string | null;
+  } | {
+    name: string | null;
+  }[] | null;
+};
+
+type ParentProfile = {
+  id: string;
+  education_level: string | null;
+  occupation: string | null;
+  gender: StudentGender | null;
+  age_years: number | null;
+  income_category: string | null;
+  income_reference: string | null;
+  income_amount: number | null;
+};
+
 type AdminUser = {
   id: string;
   role: UserRole;
@@ -28,6 +55,8 @@ type AdminUser = {
   email: string | null;
   created_at: string;
   student_profiles?: StudentProfile | null;
+  teacher_profiles?: TeacherProfile | null;
+  parent_profiles?: ParentProfile | null;
 };
 
 type EditFormData = {
@@ -39,12 +68,21 @@ type EditFormData = {
   weight_kg: string;
   height_cm: string;
   daily_water_target_ml: string;
+  school_id: string;
+  employee_number: string;
+  full_title: string;
+  phone: string;
+  education_level: string;
+  occupation: string;
+  age_years: string;
+  income_amount: string;
 };
 
 const roleLabels: Record<UserRole, string> = {
   student: "Siswa",
   parent: "Orang Tua",
   admin: "Admin",
+  teacher: "Guru",
 };
 
 function generateStudentCode() {
@@ -74,9 +112,51 @@ export default function AdminUsersPage() {
     weight_kg: "",
     height_cm: "",
     daily_water_target_ml: "",
+    school_id: "",
+    employee_number: "",
+    full_title: "",
+    phone: "",
+    education_level: "",
+    occupation: "",
+    age_years: "",
+    income_amount: "",
   });
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [schools, setSchools] = useState<SchoolOption[]>([]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function fetchSchools() {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("schools")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching schools for admin users:", error);
+        return;
+      }
+
+      if (!isActive) return;
+
+      setSchools(
+        (((data as { id: string; name: string }[] | null) || []).map((school) => ({
+          value: school.id,
+          label: school.name,
+        }))),
+      );
+    }
+
+    void fetchSchools();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -105,27 +185,57 @@ export default function AdminUsersPage() {
 
         const typedProfiles = (profilesData || []) as AdminUser[];
         const studentIds = typedProfiles.filter((profile) => profile.role === "student").map((profile) => profile.id);
+        const teacherIds = typedProfiles.filter((profile) => profile.role === "teacher").map((profile) => profile.id);
+        const parentIds = typedProfiles.filter((profile) => profile.role === "parent").map((profile) => profile.id);
 
-        if (studentIds.length === 0) {
-          if (isActive) setUsers(typedProfiles);
-          return;
+        const studentMap: Record<string, StudentProfile> = {};
+        const teacherMap: Record<string, TeacherProfile> = {};
+        const parentMap: Record<string, ParentProfile> = {};
+
+        if (studentIds.length > 0) {
+          const { data: studentData, error: studentError } = await supabase
+            .from("student_profiles")
+            .select("*")
+            .in("id", studentIds);
+
+          if (studentError) throw studentError;
+
+          ((studentData || []) as StudentProfile[]).forEach((studentProfile) => {
+            studentMap[studentProfile.id] = studentProfile;
+          });
         }
 
-        const { data: studentData, error: studentError } = await supabase
-          .from("student_profiles")
-          .select("*")
-          .in("id", studentIds);
+        if (teacherIds.length > 0) {
+          const { data: teacherData, error: teacherError } = await supabase
+            .from("teacher_profiles")
+            .select("id, school_id, employee_number, full_title, gender, phone, schools(name)")
+            .in("id", teacherIds);
 
-        if (studentError) throw studentError;
+          if (teacherError) throw teacherError;
 
-        const studentMap = ((studentData || []) as StudentProfile[]).reduce<Record<string, StudentProfile>>((acc, studentProfile) => {
-          acc[studentProfile.id] = studentProfile;
-          return acc;
-        }, {});
+          ((teacherData || []) as TeacherProfile[]).forEach((teacherProfile) => {
+            teacherMap[teacherProfile.id] = teacherProfile;
+          });
+        }
+
+        if (parentIds.length > 0) {
+          const { data: parentData, error: parentError } = await supabase
+            .from("parent_profiles")
+            .select("id, education_level, occupation, gender, age_years, income_category, income_reference, income_amount")
+            .in("id", parentIds);
+
+          if (parentError) throw parentError;
+
+          ((parentData || []) as ParentProfile[]).forEach((parentProfile) => {
+            parentMap[parentProfile.id] = parentProfile;
+          });
+        }
 
         const merged = typedProfiles.map((profile) => ({
           ...profile,
           student_profiles: studentMap[profile.id] || null,
+          teacher_profiles: teacherMap[profile.id] || null,
+          parent_profiles: parentMap[profile.id] || null,
         }));
 
         if (isActive) setUsers(merged);
@@ -163,12 +273,20 @@ export default function AdminUsersPage() {
       email: user.email || "",
       role: user.role,
       birth_date: user.student_profiles?.birth_date || "",
-      gender: user.student_profiles?.gender || "male",
+      gender: user.student_profiles?.gender || user.teacher_profiles?.gender || "male",
       weight_kg: weight ? String(weight) : "",
       height_cm: user.student_profiles?.height_cm ? String(user.student_profiles.height_cm) : "",
       daily_water_target_ml: user.student_profiles?.daily_water_target_ml
         ? String(user.student_profiles.daily_water_target_ml)
         : String(defaultTarget),
+      school_id: user.teacher_profiles?.school_id || "",
+      employee_number: user.teacher_profiles?.employee_number || "",
+      full_title: user.teacher_profiles?.full_title || "",
+      phone: user.teacher_profiles?.phone || "",
+      education_level: user.parent_profiles?.education_level || "",
+      occupation: user.parent_profiles?.occupation || "",
+      age_years: user.parent_profiles?.age_years ? String(user.parent_profiles.age_years) : "",
+      income_amount: user.parent_profiles?.income_amount ? String(user.parent_profiles.income_amount) : "",
     });
   };
 
@@ -217,6 +335,43 @@ export default function AdminUsersPage() {
         if (studentError) throw studentError;
       }
 
+      if (editFormData.role === "teacher") {
+        const { error: teacherError } = await supabase
+          .from("teacher_profiles")
+          .upsert({
+            id: editingUser.id,
+            school_id: editFormData.school_id || null,
+            employee_number: editFormData.employee_number.trim() || null,
+            full_title: editFormData.full_title.trim() || null,
+            gender: editFormData.gender,
+            phone: editFormData.phone.trim() || null,
+            updated_at: new Date().toISOString(),
+          });
+
+        if (teacherError) throw teacherError;
+      }
+
+      if (editFormData.role === "parent") {
+        const incomeAmount = toNullableNumber(editFormData.income_amount);
+        const incomeClassification = classifyParentIncome(incomeAmount);
+
+        const { error: parentError } = await supabase
+          .from("parent_profiles")
+          .upsert({
+            id: editingUser.id,
+            education_level: editFormData.education_level || null,
+            occupation: editFormData.occupation.trim() || null,
+            gender: editFormData.gender,
+            age_years: toNullableNumber(editFormData.age_years),
+            income_category: incomeClassification.category || null,
+            income_reference: "umk_banyumas_2026",
+            income_amount: incomeAmount,
+            updated_at: new Date().toISOString(),
+          });
+
+        if (parentError) throw parentError;
+      }
+
       setEditingUser(null);
       refreshUsers();
     } catch (error) {
@@ -256,6 +411,11 @@ export default function AdminUsersPage() {
       if (user.role === "parent") {
         await deleteRows("child_notifications", "parent_id");
         await deleteRows("parent_children", "parent_id");
+        await deleteRows("parent_profiles", "id");
+      }
+
+      if (user.role === "teacher") {
+        await deleteRows("teacher_profiles", "id");
       }
 
       await deleteRows("survey_responses", "respondent_id");
@@ -289,6 +449,7 @@ export default function AdminUsersPage() {
                 <option value="all">Semua Role</option>
                 <option value="student">Anak / Siswa</option>
                 <option value="parent">Orang Tua</option>
+                <option value="teacher">Guru</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -330,6 +491,7 @@ export default function AdminUsersPage() {
                           <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${
                             user.role === "student" ? "bg-blue-50 text-blue-600 border-blue-200" :
                             user.role === "parent" ? "bg-teal-50 text-teal-600 border-teal-200" :
+                            user.role === "teacher" ? "bg-violet-50 text-violet-600 border-violet-200" :
                             "bg-purple-50 text-purple-600 border-purple-200"
                           }`}>
                             {roleLabels[user.role]}
@@ -339,6 +501,16 @@ export default function AdminUsersPage() {
                           {user.role === "student" && user.student_profiles ? (
                             <div className="text-xs">
                               {user.student_profiles.weight_kg || "-"} kg &bull; {user.student_profiles.height_cm || "-"} cm &bull; Target: {user.student_profiles.daily_water_target_ml || "-"}ml
+                            </div>
+                          ) : user.role === "teacher" && user.teacher_profiles ? (
+                            <div className="text-xs space-y-1">
+                              <div>{Array.isArray(user.teacher_profiles.schools) ? user.teacher_profiles.schools[0]?.name || "-" : user.teacher_profiles.schools?.name || "-"}</div>
+                              <div>NIG: {user.teacher_profiles.employee_number || "-"} &bull; HP: {user.teacher_profiles.phone || "-"}</div>
+                            </div>
+                          ) : user.role === "parent" && user.parent_profiles ? (
+                            <div className="text-xs space-y-1">
+                              <div>{getParentEducationLabel(user.parent_profiles.education_level)} &bull; {user.parent_profiles.occupation || "-"}</div>
+                              <div>{user.parent_profiles.age_years || "-"} th &bull; {classifyParentIncome(user.parent_profiles.income_amount).label}</div>
                             </div>
                           ) : (
                             <span className="text-slate-300">-</span>
@@ -432,6 +604,7 @@ export default function AdminUsersPage() {
                   >
                     <option value="student">Siswa</option>
                     <option value="parent">Orang Tua</option>
+                    <option value="teacher">Guru</option>
                     <option value="admin">Admin</option>
                   </select>
                 </label>
@@ -501,6 +674,145 @@ export default function AdminUsersPage() {
                           onChange={(event) => setEditFormData({ ...editFormData, daily_water_target_ml: event.target.value })}
                         />
                       </label>
+                    </div>
+                  </div>
+                )}
+
+                {editFormData.role === "teacher" && (
+                  <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+                    <p className="mb-4 text-sm font-bold text-violet-700">Detail Guru</p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="space-y-2 md:col-span-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Sekolah</span>
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                          value={editFormData.school_id}
+                          onChange={(event) => setEditFormData({ ...editFormData, school_id: event.target.value })}
+                        >
+                          <option value="">Pilih sekolah</option>
+                          {schools.map((school) => (
+                            <option key={school.value} value={school.value}>
+                              {school.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Nomor Induk Guru</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                          value={editFormData.employee_number}
+                          onChange={(event) => setEditFormData({ ...editFormData, employee_number: event.target.value })}
+                          placeholder="Nomor induk guru"
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Nomor HP</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                          value={editFormData.phone}
+                          onChange={(event) => setEditFormData({ ...editFormData, phone: event.target.value })}
+                          placeholder="08xxxxxxxxxx"
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Jenis Kelamin</span>
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                          value={editFormData.gender}
+                          onChange={(event) => setEditFormData({ ...editFormData, gender: event.target.value as StudentGender })}
+                        >
+                          <option value="male">Laki-laki</option>
+                          <option value="female">Perempuan</option>
+                        </select>
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Jabatan / Gelar</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                          value={editFormData.full_title}
+                          onChange={(event) => setEditFormData({ ...editFormData, full_title: event.target.value })}
+                          placeholder="Wali Kelas / Guru PJOK / S.Pd"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {editFormData.role === "parent" && (
+                  <div className="rounded-2xl border border-teal-100 bg-teal-50/50 p-4">
+                    <p className="mb-4 text-sm font-bold text-teal-700">Detail Orang Tua</p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Pendidikan Terakhir</span>
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          value={editFormData.education_level}
+                          onChange={(event) => setEditFormData({ ...editFormData, education_level: event.target.value })}
+                        >
+                          <option value="">Pilih pendidikan</option>
+                          {PARENT_EDUCATION_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Pekerjaan</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          value={editFormData.occupation}
+                          onChange={(event) => setEditFormData({ ...editFormData, occupation: event.target.value })}
+                          placeholder="Pekerjaan orang tua"
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Jenis Kelamin</span>
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          value={editFormData.gender}
+                          onChange={(event) => setEditFormData({ ...editFormData, gender: event.target.value as StudentGender })}
+                        >
+                          {PARENT_GENDER_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Umur</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          min="17"
+                          type="number"
+                          value={editFormData.age_years}
+                          onChange={(event) => setEditFormData({ ...editFormData, age_years: event.target.value })}
+                          placeholder="Umur orang tua"
+                        />
+                      </label>
+                      <label className="space-y-2 md:col-span-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Gaji Bulanan</span>
+                        <input
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                          min="0"
+                          step="0.01"
+                          type="number"
+                          value={editFormData.income_amount}
+                          onChange={(event) => setEditFormData({ ...editFormData, income_amount: event.target.value })}
+                          placeholder="Nominal gaji bulanan"
+                        />
+                      </label>
+                      <div className="md:col-span-2 rounded-xl bg-white px-4 py-3 text-xs text-slate-600 border border-teal-100">
+                        <p>Acuan otomatis: <span className="font-bold text-slate-800">{BANYUMAS_UMK_2026_LABEL}</span> ({formatCurrencyId(BANYUMAS_UMK_2026)})</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${classifyParentIncome(toNullableNumber(editFormData.income_amount)).className}`}>
+                            {classifyParentIncome(toNullableNumber(editFormData.income_amount)).label}
+                          </span>
+                          <span>{classifyParentIncome(toNullableNumber(editFormData.income_amount)).helperText}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

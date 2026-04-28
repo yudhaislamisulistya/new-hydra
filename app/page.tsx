@@ -39,7 +39,7 @@ export default function SplashScreen() {
         </div>
         
         <h1 className="text-4xl font-extrabold tracking-tight mb-2 text-center text-white drop-shadow-md">
-          NEW-HYDRAS
+          NEW HYDRA
         </h1>
         <p className="text-blue-100 font-medium text-center px-4 max-w-xs text-sm">
           Deteksi Status Hidrasi untuk Anak Sekolah Dasar

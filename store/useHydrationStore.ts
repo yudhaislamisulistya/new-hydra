@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createClient } from "../utils/supabase/client";
+import { formatLocalDateKey } from "../utils/hydrationCalc";
 
 export interface FluidRecord {
   id: string;
@@ -20,7 +21,8 @@ interface HydrationState {
     amount: number,
     drinkType: string,
     required: number,
-    activity: "rendah" | "sedang" | "tinggi"
+    activity: "rendah" | "sedang" | "tinggi",
+    loggedAt?: string
   ) => Promise<boolean>;
 }
 
@@ -43,7 +45,7 @@ export const useHydrationStore = create<HydrationState>((set) => ({
       .gte('logged_at', today.toISOString());
 
     if (!error && data) {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = formatLocalDateKey(today);
       const totalIntake = data.reduce((sum, log) => sum + log.amount_ml, 0);
       
       set((state) => ({
@@ -65,7 +67,7 @@ export const useHydrationStore = create<HydrationState>((set) => ({
     }
   },
 
-  addIntake: async (studentId, date, amount, drinkType, required, activity) => {
+  addIntake: async (studentId, date, amount, drinkType, required, activity, loggedAt) => {
     const supabase = createClient();
     
     // Insert into DB
@@ -75,7 +77,7 @@ export const useHydrationStore = create<HydrationState>((set) => ({
         student_id: studentId,
         amount_ml: amount,
         drink_type: drinkType,
-        logged_at: new Date().toISOString()
+        logged_at: loggedAt || new Date().toISOString()
       });
 
     if (error) {

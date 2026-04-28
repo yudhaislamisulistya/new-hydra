@@ -18,9 +18,9 @@ export function BottomNav() {
       ]
     : [
         { name: "Home", href: "/dashboard", icon: Home },
-        { name: "Tracker", href: "/tracker", icon: Droplet },
         { name: "Edukasi", href: "/education", icon: BookOpen },
-        { name: "Survei", href: "/survey", icon: ClipboardList },
+        { name: "Tracker", href: "/tracker", icon: Droplet },
+        { name: "Kuis", href: "/survey", icon: ClipboardList },
         { name: "Ranking", href: "/leaderboard", icon: Trophy },
       ];
 

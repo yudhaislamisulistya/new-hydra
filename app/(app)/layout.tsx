@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { BottomNav } from "../../components/layout/BottomNav";
 import { useUserStore } from "../../store/useUserStore";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, profile, fetchProfile } = useUserStore();
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     fetchProfile();
@@ -36,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Admin and Parent might have different bottom nav or no bottom nav at all in a real app,
   // but for now we keep it unified or we can conditionally hide it.
-  const showBottomNav = profile?.role !== "admin";
+  const showBottomNav = profile?.role !== "admin" && profile?.role !== "teacher";
 
   return (
     <div className="min-h-full flex flex-col bg-slate-50 pb-20">
