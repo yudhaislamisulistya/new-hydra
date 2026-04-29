@@ -15,6 +15,8 @@ type QuizSummary = {
   description: string | null;
   target_role: string | null;
   survey_type: string | null;
+  randomize_questions?: boolean | null;
+  randomize_options?: boolean | null;
 };
 
 type SurveyResponseRow = {
@@ -29,6 +31,15 @@ type SurveyQuestionRow = {
   options: string[] | null;
   order_number: number;
 };
+
+function shuffleArray<T>(items: T[]) {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  return next;
+}
 
 const REQUIRED_DAILY_QUIZ_TYPES = new Set(["sikap", "pengetahuan"]);
 
@@ -46,6 +57,7 @@ export default function SurveyPage() {
   // Quiz mode state
   const [activeSurvey, setActiveSurvey] = useState<QuizSummary | null>(null);
   const [questions, setQuestions] = useState<SurveyQuestionRow[]>([]);
+  const [questionOptionOrders, setQuestionOptionOrders] = useState<Record<string, string[]>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loadingQuiz, setLoadingQuiz] = useState(false);
@@ -61,7 +73,7 @@ export default function SurveyPage() {
         // 1. Fetch active surveys targeting student
         const { data: surveysData, error: survError } = await supabase
           .from('surveys')
-          .select('id, title, description, target_role, survey_type')
+          .select('id, title, description, target_role, survey_type, randomize_questions, randomize_options')
           .eq('is_active', true)
           .eq('target_role', 'student')
           .order('created_at', { ascending: false });
@@ -120,7 +132,16 @@ export default function SurveyPage() {
         return;
       }
 
-      setQuestions((data as SurveyQuestionRow[] | null) || []);
+      const fetchedQuestions = (data as SurveyQuestionRow[] | null) || [];
+      const nextQuestions = survey.randomize_questions ? shuffleArray(fetchedQuestions) : fetchedQuestions;
+      const nextOptionOrders = nextQuestions.reduce<Record<string, string[]>>((acc, question) => {
+        const options = Array.isArray(question.options) ? question.options : [];
+        acc[question.id] = survey.randomize_options ? shuffleArray(options) : options;
+        return acc;
+      }, {});
+
+      setQuestions(nextQuestions);
+      setQuestionOptionOrders(nextOptionOrders);
       setActiveSurvey(survey);
       setCurrentIndex(0);
       setAnswers({});
@@ -184,6 +205,7 @@ export default function SurveyPage() {
   const handleBackToList = () => {
     setActiveSurvey(null);
     setQuestions([]);
+    setQuestionOptionOrders({});
     setCurrentIndex(0);
     setAnswers({});
     setShowResult(false);
@@ -281,8 +303,9 @@ export default function SurveyPage() {
           <div className="grid gap-3 mt-6">
             {(() => {
               const options: string[] = Array.isArray(currentQ.options) ? currentQ.options : [];
+              const displayedOptions = questionOptionOrders[currentQ.id] || options;
 
-              return options.map((opt: string, idx: number) => (
+              return displayedOptions.map((opt: string, idx: number) => (
                 <button
                   key={idx}
                   onClick={() => handleAnswer(currentQ.id, opt)}

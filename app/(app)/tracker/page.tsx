@@ -18,6 +18,19 @@ import {
 import { createClient } from "../../../utils/supabase/client";
 
 const DRINK_VOLUMES = [125, 200, 250, 300, 330, 500, 1000];
+const TRACKER_PERIOD_OPTIONS = [
+  { value: "pagi", label: "Pagi" },
+  { value: "siang", label: "Siang" },
+  { value: "sore", label: "Sore" },
+  { value: "malam", label: "Malam" },
+];
+
+const TRACKER_PERIOD_HOURS: Record<string, number> = {
+  pagi: 8,
+  siang: 12,
+  sore: 16,
+  malam: 20,
+};
 
 const DRINK_TYPES = [
   { value: "Air putih/air matang", label: "Air putih / Air matang" },
@@ -68,6 +81,7 @@ export default function TrackerPage() {
   const today = formatLocalDateKey(new Date());
 
   const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(getHydrationPeriod(new Date()));
   const [drinkType, setDrinkType] = useState("Air putih/air matang");
   const [volume, setVolume] = useState<number>(250);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -108,16 +122,15 @@ export default function TrackerPage() {
     return () => window.clearTimeout(timer);
   }, [fetchSelectedDateLogs, profile?.id, selectedDate]);
 
-  const buildSelectedLoggedAtIso = useCallback((dateKey: string) => {
+  const buildSelectedLoggedAtIso = useCallback((dateKey: string, periodKey: string) => {
     const [year, month, day] = dateKey.split("-").map(Number);
-    const now = new Date();
     const selectedDateTime = new Date(
       year,
       month - 1,
       day,
-      now.getHours(),
-      now.getMinutes(),
-      now.getSeconds(),
+      TRACKER_PERIOD_HOURS[periodKey] ?? 8,
+      0,
+      0,
       0
     );
 
@@ -129,7 +142,7 @@ export default function TrackerPage() {
 
     const selectedDateRecord = records[selectedDate];
     const required = selectedDateRecord?.required_intake_ml || 1500;
-    const loggedAt = buildSelectedLoggedAtIso(selectedDate);
+    const loggedAt = buildSelectedLoggedAtIso(selectedDate, selectedPeriod);
 
     const isSaved = await addIntake(profile.id, selectedDate, volume, drinkType, required, "sedang", loggedAt);
 
@@ -291,6 +304,13 @@ export default function TrackerPage() {
                 className="flex h-12 w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+
+            <Select
+              label="Waktu"
+              value={selectedPeriod}
+              onChange={(event) => setSelectedPeriod(event.target.value)}
+              options={TRACKER_PERIOD_OPTIONS}
+            />
 
             <Select
               label="Jenis Minuman"

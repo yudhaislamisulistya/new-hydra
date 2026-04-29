@@ -7,8 +7,20 @@ import { createClient } from "../../../utils/supabase/client";
 import { ClipboardList, Plus } from "lucide-react";
 import Link from "next/link";
 
+type SurveySettings = {
+  id: string;
+  title: string;
+  description: string | null;
+  target_role: string;
+  is_active: boolean | null;
+  survey_type: string;
+  randomize_questions?: boolean | null;
+  randomize_options?: boolean | null;
+  survey_questions?: Array<{ count: number }>;
+};
+
 export default function AdminQuizzesPage() {
-  const [surveys, setSurveys] = useState<any[]>([]);
+  const [surveys, setSurveys] = useState<SurveySettings[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18,6 +30,8 @@ export default function AdminQuizzesPage() {
     target_role: "student",
     is_active: true,
     survey_type: "survey",
+    randomize_questions: false,
+    randomize_options: false,
   });
 
   useEffect(() => {
@@ -61,6 +75,8 @@ export default function AdminQuizzesPage() {
           target_role: formData.target_role,
           is_active: formData.is_active,
           survey_type: formData.survey_type,
+          randomize_questions: formData.randomize_questions,
+          randomize_options: formData.randomize_options,
         }])
         .select();
 
@@ -70,11 +86,19 @@ export default function AdminQuizzesPage() {
         // Refresh surveys list by adding the new one
         setSurveys([{ ...data[0], survey_questions: [{ count: 0 }] }, ...surveys]);
         setIsModalOpen(false);
-        setFormData({ title: "", description: "", target_role: "student", is_active: true, survey_type: "survey" });
+        setFormData({
+          title: "",
+          description: "",
+          target_role: "student",
+          is_active: true,
+          survey_type: "survey",
+          randomize_questions: false,
+          randomize_options: false,
+        });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating survey:", error);
-      alert(`Gagal membuat kuis: ${error.message}`);
+      alert(`Gagal membuat kuis: ${error instanceof Error ? error.message : "Terjadi kesalahan."}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -141,6 +165,23 @@ export default function AdminQuizzesPage() {
                   <p className="text-sm text-slate-500 mb-6 line-clamp-2 min-h-[40px]">
                     {survey.description || "Tidak ada deskripsi"}
                   </p>
+
+                  <div className="mb-5 flex flex-wrap gap-2">
+                    <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                      survey.randomize_questions
+                        ? "bg-indigo-100 text-indigo-700"
+                        : "bg-slate-100 text-slate-500"
+                    }`}>
+                      {survey.randomize_questions ? "Pertanyaan Acak" : "Pertanyaan Tetap"}
+                    </span>
+                    <span className={`rounded-md px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                      survey.randomize_options
+                        ? "bg-cyan-100 text-cyan-700"
+                        : "bg-slate-100 text-slate-500"
+                    }`}>
+                      {survey.randomize_options ? "Opsi Acak" : "Opsi Tetap"}
+                    </span>
+                  </div>
                   
                   <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                     <div className="text-sm font-medium text-slate-600">
@@ -244,6 +285,36 @@ export default function AdminQuizzesPage() {
                     <div>
                       <p className="text-sm font-bold text-slate-800">📊 Sikap (Skor 1-4)</p>
                       <p className="text-xs text-slate-500 mt-0.5">Jawaban: Tidak Pernah(1), Jarang(2), Sering(3), Sangat Sering(4). Kesimpulan: ≥75% Baik, &lt;75% Buruk.</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Pengaturan Acak</label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:border-slate-300 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={formData.randomize_questions}
+                      onChange={(e) => setFormData({ ...formData, randomize_questions: e.target.checked })}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">Acak Pertanyaan</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Urutan pertanyaan akan diacak saat kuis dibuka.</p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:border-slate-300 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={formData.randomize_options}
+                      onChange={(e) => setFormData({ ...formData, randomize_options: e.target.checked })}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">Acak Opsi Jawaban</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Urutan pilihan jawaban akan diacak saat kuis dibuka.</p>
                     </div>
                   </label>
                 </div>

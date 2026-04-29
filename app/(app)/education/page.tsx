@@ -19,12 +19,16 @@ type EducationMaterial = {
   survey_id: string | null;
   survey_title: string | null;
   survey_type: SurveyType | null;
+  randomize_questions?: boolean | null;
+  randomize_options?: boolean | null;
 };
 
 type LinkedSurvey = {
   id: string;
   title: string;
   survey_type: SurveyType;
+  randomize_questions?: boolean | null;
+  randomize_options?: boolean | null;
 };
 
 type SurveyQuestion = {
@@ -38,6 +42,15 @@ type SurveyQuestion = {
 type SurveyResponseRow = {
   survey_id: string;
 };
+
+function shuffleArray<T>(items: T[]) {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  return next;
+}
 
 // Helper to extract YouTube video ID
 const getYouTubeId = (url: string | null) => {
@@ -63,6 +76,7 @@ function EducationCard({
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [questionOptionOrders, setQuestionOptionOrders] = useState<Record<string, string[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [showResult, setShowResult] = useState(false);
 
@@ -102,7 +116,16 @@ function EducationCard({
         return;
       }
 
-      setQuestions((data as SurveyQuestion[]) || []);
+      const fetchedQuestions = (data as SurveyQuestion[]) || [];
+      const nextQuestions = material.randomize_questions ? shuffleArray(fetchedQuestions) : fetchedQuestions;
+      const nextOptionOrders = nextQuestions.reduce<Record<string, string[]>>((acc, question) => {
+        const options = Array.isArray(question.options) ? question.options : [];
+        acc[question.id] = material.randomize_options ? shuffleArray(options) : options;
+        return acc;
+      }, {});
+
+      setQuestions(nextQuestions);
+      setQuestionOptionOrders(nextOptionOrders);
       setCurrentIndex(0);
       setAnswers({});
       setShowQuiz(true);
@@ -174,6 +197,7 @@ function EducationCard({
       onCompleted(material.survey_id);
       setShowQuiz(false);
       setShowResult(true);
+      setQuestionOptionOrders({});
     } catch (error) {
       console.error("Error submitting education quiz:", error);
       const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan.";
@@ -302,7 +326,7 @@ function EducationCard({
                   </Button>
                 </div>
               ) : (
-                (Array.isArray(currentQuestion.options) ? currentQuestion.options : []).map((option, index) => (
+                (questionOptionOrders[currentQuestion.id] || (Array.isArray(currentQuestion.options) ? currentQuestion.options : [])).map((option, index) => (
                   <button
                     key={`${currentQuestion.id}-${index}`}
                     onClick={() => handleAnswer(currentQuestion.id, option)}
@@ -411,7 +435,7 @@ export default function EducationPage() {
         if (surveyIds.length > 0) {
           const { data: surveysData, error: surveysError } = await supabase
             .from("surveys")
-            .select("id, title, survey_type")
+            .select("id, title, survey_type, randomize_questions, randomize_options")
             .in("id", surveyIds);
 
           if (surveysError) throw surveysError;
@@ -443,6 +467,8 @@ export default function EducationPage() {
               ...material,
               survey_title: linkedSurvey?.title || null,
               survey_type: linkedSurvey?.survey_type || null,
+              randomize_questions: linkedSurvey?.randomize_questions || false,
+              randomize_options: linkedSurvey?.randomize_options || false,
             };
           })
         );

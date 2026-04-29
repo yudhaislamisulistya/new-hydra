@@ -19,11 +19,19 @@ type SurveySummary = {
   id: string;
   title: string;
   description: string | null;
+  survey_type: string | null;
 };
 
 type SurveyResponseRow = {
   survey_id: string;
 };
+
+const REQUIRED_DAILY_QUIZ_TYPES = new Set(["sikap", "pengetahuan"]);
+
+function isRequiredDailyQuiz(survey: SurveySummary) {
+  const normalizedTitle = survey.title.toLowerCase();
+  return REQUIRED_DAILY_QUIZ_TYPES.has(survey.survey_type || "") && normalizedTitle.includes("dehidrasi");
+}
 
 type ChildLink = {
   id: string;
@@ -223,13 +231,21 @@ export default function DashboardPage() {
       
       const { data: surveysData } = await supabase
         .from('surveys')
-        .select('id, title, description')
+        .select('id, title, description, survey_type')
         .eq('is_active', true)
         .eq('target_role', 'student')
         .order('created_at', { ascending: false })
-        .limit(4);
+        .limit(10);
       
-      setSurveys(surveysData || []);
+      const quizItems = ((surveysData as SurveySummary[] | null) || [])
+        .filter(isRequiredDailyQuiz)
+        .sort((a, b) => {
+          const priority = { pengetahuan: 0, sikap: 1 };
+          return (priority[a.survey_type as keyof typeof priority] ?? 99) - (priority[b.survey_type as keyof typeof priority] ?? 99);
+        })
+        .slice(0, 2);
+
+      setSurveys(quizItems);
 
       // Check today's completions
       const todayStart = new Date();
@@ -867,7 +883,6 @@ export default function DashboardPage() {
                             <div className="mt-3 space-y-2">
                               {studentLogs.map((log) => {
                                 const badge = getDrinkBadge(log.drink_type);
-
                                 return (
                                   <div key={log.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
                                     <div className="flex items-start justify-between gap-3">
@@ -1554,7 +1569,7 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">Riwayat Minum Hari Ini</h3>
-                  <p className="text-xs text-slate-500 mt-1">Klik tracker untuk menambahkan data baru. Warna hijau menandakan pilihan yang lebih sehat.</p>
+                  <p className="text-xs text-slate-500 mt-1">Klik tracker untuk menambahkan data baru. Kategori minuman bersifat informatif, tetapi total cairan tetap jadi dasar perhitungan hidrasi.</p>
                 </div>
                 <Link href="/tracker" className="text-xs font-bold text-blue-600 shrink-0">
                   Buka Tracker
@@ -1567,18 +1582,6 @@ export default function DashboardPage() {
                     {summary.label}: {summary.totalMl} ml
                   </span>
                 ))}
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Sehat
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Cukup baik
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 border border-rose-200">
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  Kurang baik
-                </span>
               </div>
 
               {historyLoading ? (
@@ -1594,7 +1597,6 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   {hydrationHistory.map((log) => {
                     const badge = getDrinkBadge(log.drink_type);
-
                     return (
                       <div key={log.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                         <div className="flex items-start justify-between gap-3">

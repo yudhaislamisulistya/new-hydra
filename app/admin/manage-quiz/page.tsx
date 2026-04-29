@@ -9,12 +9,23 @@ import { ArrowLeft, Plus, Trash2, Download, Users, ChevronDown, ChevronUp, Penci
 import Link from "next/link";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
+type QuizSurvey = {
+  id: string;
+  title: string;
+  description: string | null;
+  is_active: boolean | null;
+  target_role: string | null;
+  survey_type: string | null;
+  randomize_questions?: boolean | null;
+  randomize_options?: boolean | null;
+};
+
 function ManageQuizContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const surveyId = searchParams.get('id');
   
-  const [survey, setSurvey] = useState<any>(null);
+  const [survey, setSurvey] = useState<QuizSurvey | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [responses, setResponses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +42,12 @@ function ManageQuizContent() {
 
   // Edit Quiz Modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editFormData, setEditFormData] = useState({ title: '', description: '' });
+  const [editFormData, setEditFormData] = useState({
+    title: '',
+    description: '',
+    randomize_questions: false,
+    randomize_options: false,
+  });
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
   // Chart Modal
@@ -229,7 +245,12 @@ function ManageQuizContent() {
 
   // ── Edit Survey ──
   const handleOpenEdit = () => {
-    setEditFormData({ title: survey?.title || '', description: survey?.description || '' });
+    setEditFormData({
+      title: survey?.title || '',
+      description: survey?.description || '',
+      randomize_questions: Boolean(survey?.randomize_questions),
+      randomize_options: Boolean(survey?.randomize_options),
+    });
     setIsEditModalOpen(true);
   };
 
@@ -241,10 +262,21 @@ function ManageQuizContent() {
     try {
       const { error } = await supabase
         .from('surveys')
-        .update({ title: editFormData.title.trim(), description: editFormData.description.trim() })
+        .update({
+          title: editFormData.title.trim(),
+          description: editFormData.description.trim(),
+          randomize_questions: editFormData.randomize_questions,
+          randomize_options: editFormData.randomize_options,
+        })
         .eq('id', surveyId);
       if (error) throw error;
-      setSurvey({ ...survey, title: editFormData.title.trim(), description: editFormData.description.trim() });
+      setSurvey((current) => current ? {
+        ...current,
+        title: editFormData.title.trim(),
+        description: editFormData.description.trim(),
+        randomize_questions: editFormData.randomize_questions,
+        randomize_options: editFormData.randomize_options,
+      } : current);
       setIsEditModalOpen(false);
     } catch (err: any) {
       alert(`Gagal menyimpan: ${err.message}`);
@@ -367,6 +399,16 @@ function ManageQuizContent() {
                 }`}>
                   {survey.survey_type === 'pengetahuan' ? 'Pengetahuan (Skor)' :
                    survey.survey_type === 'sikap' ? 'Sikap (Skor)' : 'Survei'}
+                </span>
+                <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                  survey.randomize_questions ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {survey.randomize_questions ? 'Pertanyaan Acak' : 'Pertanyaan Tetap'}
+                </span>
+                <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                  survey.randomize_options ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {survey.randomize_options ? 'Opsi Acak' : 'Opsi Tetap'}
                 </span>
               </div>
             </div>
@@ -728,6 +770,35 @@ function ManageQuizContent() {
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
                   ></textarea>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Pengaturan Acak</label>
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:border-slate-300 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={editFormData.randomize_questions}
+                        onChange={(e) => setEditFormData({ ...editFormData, randomize_questions: e.target.checked })}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">Acak Pertanyaan</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Urutan pertanyaan akan diacak saat siswa membuka kuis.</p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:border-slate-300 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={editFormData.randomize_options}
+                        onChange={(e) => setEditFormData({ ...editFormData, randomize_options: e.target.checked })}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">Acak Opsi Jawaban</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Urutan pilihan jawaban akan diacak saat siswa membuka kuis.</p>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </form>
             </div>

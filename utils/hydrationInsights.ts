@@ -1,4 +1,4 @@
-export type DrinkCategory = "healthy" | "moderate" | "poor";
+export type DrinkCategory = "good" | "not_good";
 export type HydrationPeriodKey = "pagi" | "siang" | "sore" | "malam";
 
 export type HydrationLogLike = {
@@ -7,55 +7,35 @@ export type HydrationLogLike = {
   logged_at: string;
 };
 
-const HEALTHY_TYPES = new Set([
-  "Air minum utama",
+const GOOD_DRINK_TYPES = new Set([
   "Air putih/air matang",
-  "Air mineral",
-]);
-
-const MODERATE_TYPES = new Set([
+  "Air mineral kemasan",
   "Susu cair murni",
-  "Susu dan produk susu cair",
-  "Jus buah tanpa gula",
-  "Minuman isotonik/sport drink",
 ]);
 
 export function getDrinkCategory(drinkType: string | null): DrinkCategory {
-  if (!drinkType || HEALTHY_TYPES.has(drinkType)) {
-    return "healthy";
+  if (!drinkType || GOOD_DRINK_TYPES.has(drinkType)) {
+    return "good";
   }
 
-  if (MODERATE_TYPES.has(drinkType)) {
-    return "moderate";
-  }
-
-  return "poor";
+  return "not_good";
 }
 
 export function getDrinkBadge(drinkType: string | null) {
   const category = getDrinkCategory(drinkType);
 
-  if (category === "healthy") {
+  if (category === "good") {
     return {
       category,
-      label: "Sehat",
+      label: "Baik",
       badgeClassName: "bg-emerald-100 text-emerald-700 border border-emerald-200",
       dotClassName: "bg-emerald-500",
     };
   }
 
-  if (category === "moderate") {
-    return {
-      category,
-      label: "Cukup baik",
-      badgeClassName: "bg-amber-100 text-amber-700 border border-amber-200",
-      dotClassName: "bg-amber-500",
-    };
-  }
-
   return {
     category,
-    label: "Kurang baik",
+    label: "Tidak Baik",
     badgeClassName: "bg-rose-100 text-rose-700 border border-rose-200",
     dotClassName: "bg-rose-500",
   };
@@ -142,18 +122,12 @@ export function getAdequacyStatus(totalIntake: number, targetIntake: number) {
 
 export function buildHydrationCorrections(logs: HydrationLogLike[], targetIntake: number) {
   const totalIntake = logs.reduce((total, log) => total + log.amount_ml, 0);
-  const healthyCount = logs.filter((log) => getDrinkCategory(log.drink_type) === "healthy").length;
-  const poorCount = logs.filter((log) => getDrinkCategory(log.drink_type) === "poor").length;
   const summaries = buildHydrationPeriodSummaries(logs);
 
   const notes: string[] = [];
 
   if (targetIntake > 0 && totalIntake < targetIntake) {
     notes.push(`Total minum baru ${totalIntake} ml dari target ${targetIntake} ml, jadi perlu dorongan tambahan.`);
-  }
-
-  if (poorCount > healthyCount) {
-    notes.push("Pilihan minuman manis masih lebih dominan daripada air putih, jadi perlu koreksi jenis minuman.");
   }
 
   if (summaries[0] && summaries[0].totalMl === 0) {
@@ -165,7 +139,7 @@ export function buildHydrationCorrections(logs: HydrationLogLike[], targetIntake
   }
 
   if (notes.length === 0) {
-    notes.push("Distribusi dan pilihan minuman sudah cukup baik. Pertahankan pola hidrasi yang konsisten.");
+    notes.push("Distribusi dan total cairan harian sudah cukup baik. Pertahankan pola hidrasi yang konsisten.");
   }
 
   return notes;
