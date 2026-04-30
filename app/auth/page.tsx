@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Droplets, School2, User, UserCheck, GraduationCap } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/Card";
