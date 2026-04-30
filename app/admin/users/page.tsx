@@ -308,13 +308,13 @@ export default function AdminUsersPage() {
         .update({
           full_name: editFormData.full_name.trim() || null,
           email: editFormData.email.trim() || null,
-          role: editFormData.role,
+          role: editingUser.role,
         })
         .eq("id", editingUser.id);
 
       if (profileError) throw profileError;
 
-      if (editFormData.role === "student") {
+      if (editingUser.role === "student") {
         const weight = toNullableNumber(editFormData.weight_kg);
         const calculatedTarget = weight ? calculateBasicFluidNeeds(weight) : null;
         const target = toNullableNumber(editFormData.daily_water_target_ml) || calculatedTarget;
@@ -335,7 +335,7 @@ export default function AdminUsersPage() {
         if (studentError) throw studentError;
       }
 
-      if (editFormData.role === "teacher") {
+      if (editingUser.role === "teacher") {
         const { error: teacherError } = await supabase
           .from("teacher_profiles")
           .upsert({
@@ -351,7 +351,7 @@ export default function AdminUsersPage() {
         if (teacherError) throw teacherError;
       }
 
-      if (editFormData.role === "parent") {
+      if (editingUser.role === "parent") {
         const incomeAmount = toNullableNumber(editFormData.income_amount);
         const incomeClassification = classifyParentIncome(incomeAmount);
 
@@ -595,21 +595,24 @@ export default function AdminUsersPage() {
                   </label>
                 </div>
 
-                <label className="block space-y-2">
+                <div className="space-y-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Role</span>
-                  <select
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    value={editFormData.role}
-                    onChange={(event) => setEditFormData({ ...editFormData, role: event.target.value as UserRole })}
-                  >
-                    <option value="student">Siswa</option>
-                    <option value="parent">Orang Tua</option>
-                    <option value="teacher">Guru</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </label>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold border ${
+                        editingUser.role === "student" ? "bg-blue-50 text-blue-600 border-blue-200" :
+                        editingUser.role === "parent" ? "bg-teal-50 text-teal-600 border-teal-200" :
+                        editingUser.role === "teacher" ? "bg-violet-50 text-violet-600 border-violet-200" :
+                        "bg-purple-50 text-purple-600 border-purple-200"
+                      }`}>
+                        {roleLabels[editingUser.role]}
+                      </span>
+                      <span className="text-xs text-slate-500">Role sudah tetap dan tidak bisa diubah dari halaman ini.</span>
+                    </div>
+                  </div>
+                </div>
 
-                {editFormData.role === "student" && (
+                {editingUser.role === "student" && (
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
                     <p className="mb-4 text-sm font-bold text-blue-700">Detail Siswa</p>
                     <div className="grid gap-4 md:grid-cols-2">
@@ -678,7 +681,7 @@ export default function AdminUsersPage() {
                   </div>
                 )}
 
-                {editFormData.role === "teacher" && (
+                {editingUser.role === "teacher" && (
                   <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
                     <p className="mb-4 text-sm font-bold text-violet-700">Detail Guru</p>
                     <div className="grid gap-4 md:grid-cols-2">
@@ -739,7 +742,7 @@ export default function AdminUsersPage() {
                   </div>
                 )}
 
-                {editFormData.role === "parent" && (
+                {editingUser.role === "parent" && (
                   <div className="rounded-2xl border border-teal-100 bg-teal-50/50 p-4">
                     <p className="mb-4 text-sm font-bold text-teal-700">Detail Orang Tua</p>
                     <div className="grid gap-4 md:grid-cols-2">

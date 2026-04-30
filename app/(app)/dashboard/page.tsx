@@ -11,7 +11,7 @@ import Link from "next/link";
 import { calculateRequiredIntake, formatLocalDateKey, type ActivityLevel, type Gender } from "../../../utils/hydrationCalc";
 import { createClient } from "../../../utils/supabase/client";
 import { getBuddyAccessory, getBuddyColor } from "../../../utils/hydrationBuddy";
-import { buildHydrationPeriodSummaries, getAdequacyStatus, getDrinkBadge } from "../../../utils/hydrationInsights";
+import { buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, getParentGenderLabel } from "../../../utils/parentProfile";
 import { buildCheckinStats, getCheckinReward, MAX_STREAK_BONUS_DAYS } from "../../../utils/gamification";
 
@@ -881,27 +881,20 @@ export default function DashboardPage() {
                             </div>
                           ) : (
                             <div className="mt-3 space-y-2">
-                              {studentLogs.map((log) => {
-                                const badge = getDrinkBadge(log.drink_type);
-                                return (
-                                  <div key={log.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-400">
-                                          <Clock3 size={12} />
-                                          <span>{new Date(log.logged_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-800">{log.drink_type || "Air putih"}</p>
-                                        <p className="text-xs text-slate-500">{log.amount_ml} ml</p>
+                              {studentLogs.map((log) => (
+                                <div key={log.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-400">
+                                        <Clock3 size={12} />
+                                        <span>{new Date(log.logged_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
                                       </div>
-                                      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${badge.badgeClassName}`}>
-                                        <span className={`h-2 w-2 rounded-full ${badge.dotClassName}`} />
-                                        {badge.label}
-                                      </span>
+                                      <p className="text-sm font-bold text-slate-800">{log.drink_type || "Air putih"}</p>
+                                      <p className="text-xs text-slate-500">{log.amount_ml} ml</p>
                                     </div>
                                   </div>
-                                );
-                              })}
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -1569,7 +1562,7 @@ export default function DashboardPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">Riwayat Minum Hari Ini</h3>
-                  <p className="text-xs text-slate-500 mt-1">Klik tracker untuk menambahkan data baru. Kategori minuman bersifat informatif, tetapi total cairan tetap jadi dasar perhitungan hidrasi.</p>
+                  <p className="text-xs text-slate-500 mt-1">Klik tracker untuk menambahkan data baru. Total cairan tetap jadi dasar perhitungan hidrasi.</p>
                 </div>
                 <Link href="/tracker" className="text-xs font-bold text-blue-600 shrink-0">
                   Buka Tracker
@@ -1595,27 +1588,20 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {hydrationHistory.map((log) => {
-                    const badge = getDrinkBadge(log.drink_type);
-                    return (
-                      <div key={log.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
-                              <Clock3 size={12} />
-                              <span>{new Date(log.logged_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
-                            </div>
-                            <p className="font-bold text-slate-800 text-sm">{log.drink_type || "Air putih"}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{log.amount_ml} ml</p>
+                  {hydrationHistory.map((log) => (
+                    <div key={log.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
+                            <Clock3 size={12} />
+                            <span>{new Date(log.logged_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
                           </div>
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold shrink-0 ${badge.badgeClassName}`}>
-                            <span className={`w-2 h-2 rounded-full ${badge.dotClassName}`} />
-                            {badge.label}
-                          </span>
+                          <p className="font-bold text-slate-800 text-sm">{log.drink_type || "Air putih"}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{log.amount_ml} ml</p>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>

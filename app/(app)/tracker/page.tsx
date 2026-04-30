@@ -12,7 +12,6 @@ import { formatLocalDateKey } from "../../../utils/hydrationCalc";
 import {
   buildHydrationPeriodSummaries,
   getAdequacyStatus,
-  getDrinkBadge,
   getHydrationPeriod,
 } from "../../../utils/hydrationInsights";
 import { createClient } from "../../../utils/supabase/client";
@@ -172,8 +171,6 @@ export default function TrackerPage() {
     sore: selectedDateLogs.filter((log) => getHydrationPeriod(log.logged_at) === "sore"),
     malam: selectedDateLogs.filter((log) => getHydrationPeriod(log.logged_at) === "malam"),
   }), [selectedDateLogs]);
-  const selectedDrinkBadge = getDrinkBadge(drinkType);
-
   return (
     <>
       <Header title="Catat Minum" />
@@ -319,11 +316,6 @@ export default function TrackerPage() {
               options={DRINK_TYPES}
             />
 
-            <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${selectedDrinkBadge.badgeClassName}`}>
-              <span className={`h-2.5 w-2.5 rounded-full ${selectedDrinkBadge.dotClassName}`} />
-              Kategori minuman: {selectedDrinkBadge.label}
-            </div>
-
             <div>
               <label className="text-sm font-medium text-slate-700 mb-2 block">Volume (ml)</label>
               <div className="flex flex-wrap gap-2">
@@ -390,7 +382,6 @@ export default function TrackerPage() {
                       </div>
                       <div className="divide-y divide-slate-100">
                         {periodLogs.map((log) => {
-                          const badge = getDrinkBadge(log.drink_type);
                           return (
                             <div key={log.id} className="flex items-center justify-between gap-3 px-4 py-3">
                               <div className="min-w-0">
@@ -399,9 +390,6 @@ export default function TrackerPage() {
                                   <span>{new Date(log.logged_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
                                 </div>
                                 <p className="font-bold text-slate-800 text-sm mt-1">{log.drink_type || "Air putih"}</p>
-                                <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${badge.badgeClassName}`}>
-                                  {badge.label}
-                                </span>
                               </div>
                               <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
                                 {log.amount_ml} ml

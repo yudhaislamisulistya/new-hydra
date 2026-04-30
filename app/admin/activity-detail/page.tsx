@@ -9,7 +9,7 @@ import { ArrowLeft, Calendar, Download, Droplets, Printer, Scale, Target } from 
 import Link from "next/link";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { calculateBasicFluidNeeds, calculateIntakeFromStoredBaseNeed, formatLocalDateKey, getGenderFactor, type LooseGender } from "../../../utils/hydrationCalc";
-import { buildHydrationCorrections, buildHydrationPeriodSummaries, getAdequacyStatus, getDrinkBadge } from "../../../utils/hydrationInsights";
+import { buildHydrationCorrections, buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
 
 const ADMIN_ACTIVITY_FACTORS = {
   rendah: 0,
@@ -644,7 +644,6 @@ function ActivityDetailContent() {
                   <div className="space-y-1">
                     {detailLogs.map((log) => {
                       const logDate = new Date(log.logged_at);
-                      const drinkBadge = getDrinkBadge(log.drink_type);
                       return (
                         <div key={log.id} className="flex justify-between items-center p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-50 last:border-0">
                           <div className="flex items-center gap-3">
@@ -655,14 +654,9 @@ function ActivityDetailContent() {
                               <p className="text-sm font-bold text-slate-800">
                                 {logDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
                               </p>
-                              <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <p className="text-xs text-slate-500 font-medium">
-                                  {logDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} • {log.drink_type || "Air Putih"}
-                                </p>
-                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${drinkBadge.badgeClassName}`}>
-                                  {drinkBadge.label}
-                                </span>
-                              </div>
+                              <p className="mt-1 text-xs text-slate-500 font-medium">
+                                {logDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} • {log.drink_type || "Air Putih"}
+                              </p>
                             </div>
                           </div>
                           <div className="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded text-sm">

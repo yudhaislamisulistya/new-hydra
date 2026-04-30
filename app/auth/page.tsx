@@ -10,11 +10,13 @@ import { Button } from "../../components/ui/Button";
 import { calculateBasicFluidNeeds } from "../../utils/hydrationCalc";
 import { buildSyntheticEmailFromUsername, normalizeUsername, resolveLoginIdentifier } from "../../utils/authIdentity";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, PARENT_EDUCATION_OPTIONS, PARENT_GENDER_OPTIONS } from "../../utils/parentProfile";
+import { formatSchoolName, normalizeSchoolNameKey } from "../../utils/schoolName";
 import { createClient } from "../../utils/supabase/client";
 
 type Role = "student" | "parent" | "admin" | "teacher";
 type Gender = "male" | "female";
 type SchoolOption = { value: string; label: string };
+const OTHER_SCHOOL_VALUE = "__other__";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -36,6 +38,7 @@ export default function AuthPage() {
     weightKg: "",
     heightCm: "",
     schoolId: "",
+    customSchoolName: "",
     classLevel: "5",
     childOrder: "",
     employeeNumber: "",
@@ -79,6 +82,57 @@ export default function AuthPage() {
 
     return () => window.clearTimeout(timer);
   }, [fetchSchools]);
+
+  const studentSchoolOptions = useMemo(
+    () => [...schools, { value: OTHER_SCHOOL_VALUE, label: "Lainnya / Other" }],
+    [schools],
+  );
+
+  const normalizedCustomSchoolName = formatSchoolName(formData.customSchoolName);
+
+  const resolveStudentSchoolId = useCallback(async () => {
+    if (formData.schoolId && formData.schoolId !== OTHER_SCHOOL_VALUE) {
+      return formData.schoolId;
+    }
+
+    const formattedSchoolName = formatSchoolName(formData.customSchoolName);
+    const normalizedKey = normalizeSchoolNameKey(formData.customSchoolName);
+
+    if (!formattedSchoolName || !normalizedKey) {
+      return null;
+    }
+
+    const existingSchool = schools.find((school) => normalizeSchoolNameKey(school.label) === normalizedKey);
+    if (existingSchool) {
+      return existingSchool.value;
+    }
+
+    const { data, error } = await supabase
+      .from("schools")
+      .insert({
+        name: formattedSchoolName,
+        is_active: true,
+      })
+      .select("id, name")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    const insertedSchool = data as { id: string; name: string };
+    setSchools((currentSchools) => {
+      if (currentSchools.some((school) => school.value === insertedSchool.id)) {
+        return currentSchools;
+      }
+
+      return [...currentSchools, { value: insertedSchool.id, label: insertedSchool.name }].sort((left, right) =>
+        left.label.localeCompare(right.label, "id-ID"),
+      );
+    });
+
+    return insertedSchool.id;
+  }, [formData.customSchoolName, formData.schoolId, schools, supabase]);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -126,10 +180,24 @@ export default function AuthPage() {
       return;
     }
 
-    if ((role === "student" || role === "teacher") && !formData.schoolId) {
+    if (role === "teacher" && !formData.schoolId) {
       setErrorMsg("Pilih sekolah terlebih dahulu.");
       setLoading(false);
       return;
+    }
+
+    if (role === "student") {
+      if (!formData.schoolId) {
+        setErrorMsg("Pilih sekolah terlebih dahulu.");
+        setLoading(false);
+        return;
+      }
+
+      if (formData.schoolId === OTHER_SCHOOL_VALUE && !normalizedCustomSchoolName) {
+        setErrorMsg("Isi nama sekolah terlebih dahulu.");
+        setLoading(false);
+        return;
+      }
     }
 
     if (role === "parent") {
@@ -219,6 +287,16 @@ export default function AuthPage() {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
       const studentCode = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
       const weight = parseFloat(formData.weightKg) || 20;
+      let resolvedSchoolId: string | null = null;
+
+      try {
+        resolvedSchoolId = await resolveStudentSchoolId();
+      } catch (error) {
+        console.error("Failed to resolve student school:", error);
+        setErrorMsg("Akun siswa berhasil dibuat, tetapi data sekolah gagal diproses. Coba periksa nama sekolah lalu ulangi.");
+        setLoading(false);
+        return;
+      }
 
       const { error: studentProfileError } = await supabase.from("student_profiles").insert({
         id: authData.user.id,
@@ -228,7 +306,7 @@ export default function AuthPage() {
         height_cm: parseFloat(formData.heightCm) || null,
         daily_water_target_ml: calculateBasicFluidNeeds(weight),
         student_code: studentCode,
-        school_id: formData.schoolId || null,
+        school_id: resolvedSchoolId,
         class_level: Number(formData.classLevel) || null,
         child_order: parseInt(formData.childOrder, 10) || null,
       });
@@ -461,11 +539,30 @@ export default function AuthPage() {
 
                           <Select
                             label="Sekolah"
-                            options={schools}
+                            options={studentSchoolOptions}
                             value={formData.schoolId}
-                            onChange={(event) => setFormData({ ...formData, schoolId: event.target.value })}
+                            onChange={(event) => setFormData({
+                              ...formData,
+                              schoolId: event.target.value,
+                              customSchoolName: event.target.value === OTHER_SCHOOL_VALUE ? formData.customSchoolName : "",
+                            })}
                             disabled={schoolsLoading}
                           />
+
+                          {formData.schoolId === OTHER_SCHOOL_VALUE && (
+                            <div className="space-y-3">
+                              <Input
+                                label="Nama Sekolah"
+                                placeholder="Contoh: SDN 1 Ampana"
+                                value={formData.customSchoolName}
+                                onChange={(event) => setFormData({ ...formData, customSchoolName: event.target.value })}
+                              />
+                              <div className="rounded-xl border border-blue-100 bg-white/80 px-3 py-3 text-xs text-slate-600">
+                                <p className="font-semibold text-slate-700">Format sekolah yang akan disimpan</p>
+                                <p className="mt-1">{normalizedCustomSchoolName || "Nama sekolah akan dirapikan otomatis setelah diisi."}</p>
+                              </div>
+                            </div>
+                          )}
 
                           <div className="grid grid-cols-2 gap-4">
                             <Select
