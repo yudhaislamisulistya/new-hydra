@@ -152,10 +152,12 @@ export default function AdminQuizzesPage() {
                     <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                       survey.survey_type === 'pengetahuan' ? 'bg-purple-100 text-purple-700' :
                       survey.survey_type === 'sikap' ? 'bg-orange-100 text-orange-700' :
+                      survey.survey_type === 'kuis' ? 'bg-green-100 text-green-700' :
                       'bg-slate-100 text-slate-600'
                     }`}>
                       {survey.survey_type === 'pengetahuan' ? '📊 Pengetahuan (Skor)' :
                        survey.survey_type === 'sikap' ? '📊 Sikap (Skor)' :
+                       survey.survey_type === 'kuis' ? '🎯 Kuis Benar/Salah' :
                        '📋 Survei (Tanpa Skor)'}
                     </span>
                   </div>
@@ -285,6 +287,17 @@ export default function AdminQuizzesPage() {
                     <div>
                       <p className="text-sm font-bold text-slate-800">📊 Sikap (Skor 1-4)</p>
                       <p className="text-xs text-slate-500 mt-0.5">Jawaban: Tidak Pernah(1), Jarang(2), Sering(3), Sangat Sering(4). Kesimpulan: ≥75% Baik, &lt;75% Buruk.</p>
+                    </div>
+                  </label>
+                  <label className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                    formData.survey_type === 'kuis' ? 'border-green-500 bg-green-50' : 'border-slate-200 hover:border-slate-300'
+                  }`}>
+                    <input type="radio" name="survey_type" value="kuis" checked={formData.survey_type === 'kuis'}
+                      onChange={() => setFormData({...formData, survey_type: 'kuis'})}
+                      className="mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">🎯 Kuis Benar/Salah</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Setiap soal punya 1 jawaban benar. Siswa dapat animasi benar/salah seperti kuis interaktif. Skor: jumlah benar ÷ total soal × 100%.</p>
                     </div>
                   </label>
                 </div>

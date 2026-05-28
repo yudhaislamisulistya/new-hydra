@@ -39,6 +39,9 @@ function ManageQuizContent() {
     question_type: "multiple_choice",
     options: '["Ya", "Tidak"]',
   });
+  // Kuis Benar/Salah option builder
+  const [kuisOptions, setKuisOptions] = useState(['', '', '', '']);
+  const [kuisCorrectIndex, setKuisCorrectIndex] = useState<number | null>(null);
 
   // Edit Quiz Modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -55,8 +58,7 @@ function ManageQuizContent() {
 
   const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
-  // ── Scoring helpers for pengetahuan / sikap ──
-  // Score is based on option ORDER: option[0]=1pt, option[1]=2pt, option[2]=3pt, option[3]=4pt
+  // ── Scoring helpers ──
   const getAnswerScore = (q: any, answer: string) => {
     if (!Array.isArray(q.options)) return 0;
     const idx = q.options.indexOf(answer);
@@ -66,27 +68,29 @@ function ManageQuizContent() {
   const calculateScore = (answers: any) => {
     if (!answers || !survey) return null;
     const type = survey.survey_type;
-    if (type !== 'pengetahuan' && type !== 'sikap') return null;
+    if (type !== 'pengetahuan' && type !== 'sikap' && type !== 'kuis') return null;
+
+    if (type === 'kuis') {
+      let correct = 0;
+      questions.forEach(q => {
+        const studentAnswer = answers[q.id]?.answer;
+        if (studentAnswer && studentAnswer === q.correct_answer) correct++;
+      });
+      const maxScore = questions.length;
+      const percentage = maxScore > 0 ? Math.round((correct / maxScore) * 10000) / 100 : 0;
+      return { totalScore: correct, maxScore, percentage, conclusion: percentage >= 70 ? 'Lulus' : 'Perlu Belajar' };
+    }
 
     let totalScore = 0;
     const maxScore = questions.length * 4;
-
     questions.forEach(q => {
       const studentAnswer = answers[q.id]?.answer;
-      if (studentAnswer) {
-        totalScore += getAnswerScore(q, studentAnswer);
-      }
+      if (studentAnswer) totalScore += getAnswerScore(q, studentAnswer);
     });
-
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 10000) / 100 : 0;
-
-    let conclusion = '';
-    if (type === 'pengetahuan') {
-      conclusion = percentage >= 75 ? 'Tinggi' : 'Rendah';
-    } else {
-      conclusion = percentage >= 75 ? 'Baik' : 'Buruk';
-    }
-
+    const conclusion = type === 'pengetahuan'
+      ? (percentage >= 75 ? 'Tinggi' : 'Rendah')
+      : (percentage >= 75 ? 'Baik' : 'Buruk');
     return { totalScore, maxScore, percentage, conclusion };
   };
 
@@ -157,17 +161,39 @@ function ManageQuizContent() {
     if (surveyId) fetchData();
   }, [surveyId]);
 
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setFormData({ question_text: "", question_type: "multiple_choice", options: '["Ya", "Tidak"]' });
+    setKuisOptions(['', '', '', '']);
+    setKuisCorrectIndex(null);
+  };
+
   const handleAddQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.question_text) return;
-    
+
     setIsSubmitting(true);
     const supabase = createClient();
-    
+
     try {
-      // Validate options format if multiple_choice
       let parsedOptions = null;
-      if (formData.question_type === 'multiple_choice' || formData.question_type === 'scale') {
+      let correctAnswer: string | null = null;
+
+      if (survey?.survey_type === 'kuis') {
+        const validOptions = kuisOptions.map(o => o.trim()).filter(Boolean);
+        if (validOptions.length < 2) {
+          alert("Isi minimal 2 opsi jawaban.");
+          setIsSubmitting(false);
+          return;
+        }
+        if (kuisCorrectIndex === null || !kuisOptions[kuisCorrectIndex]?.trim()) {
+          alert("Pilih jawaban yang benar.");
+          setIsSubmitting(false);
+          return;
+        }
+        parsedOptions = validOptions;
+        correctAnswer = kuisOptions[kuisCorrectIndex].trim();
+      } else if (formData.question_type === 'multiple_choice' || formData.question_type === 'scale') {
         try {
           parsedOptions = JSON.parse(formData.options);
           if (!Array.isArray(parsedOptions)) throw new Error("Options must be an array");
@@ -183,22 +209,18 @@ function ManageQuizContent() {
         .insert([{
           survey_id: surveyId,
           question_text: formData.question_text,
-          question_type: formData.question_type,
+          question_type: survey?.survey_type === 'kuis' ? 'multiple_choice' : formData.question_type,
           options: parsedOptions,
-          order_number: questions.length + 1
+          order_number: questions.length + 1,
+          ...(correctAnswer ? { correct_answer: correctAnswer } : {}),
         }])
         .select();
 
       if (error) throw error;
-      
+
       if (data && data.length > 0) {
         setQuestions([...questions, data[0]]);
-        setIsModalOpen(false);
-        setFormData({
-          question_text: "",
-          question_type: "multiple_choice",
-          options: '["Ya", "Tidak"]',
-        });
+        handleCloseModal();
       }
     } catch (error: any) {
       console.error("Error adding question:", error);
@@ -242,6 +264,7 @@ function ManageQuizContent() {
   };
 
   const isScored = survey?.survey_type === 'pengetahuan' || survey?.survey_type === 'sikap';
+  const isKuis = survey?.survey_type === 'kuis';
 
   // ── Edit Survey ──
   const handleOpenEdit = () => {
@@ -314,21 +337,22 @@ function ManageQuizContent() {
   const handleExportCSV = () => {
     if (responses.length === 0) return;
 
-    const isScored = survey?.survey_type === 'pengetahuan' || survey?.survey_type === 'sikap';
+    const isScoredExport = survey?.survey_type === 'pengetahuan' || survey?.survey_type === 'sikap' || survey?.survey_type === 'kuis';
+    const isKuisExport = survey?.survey_type === 'kuis';
 
-    // Build dynamic headers: fixed columns + one column per question + score columns
     const questionHeaders = questions.map((q, i) => `Pertanyaan ${i + 1}: ${q.question_text}`);
-    const scoreHeaders = isScored ? ['Skor', 'Skor Maks', 'Persentase (%)', 'Kesimpulan'] : [];
+    const scoreHeaders = isScoredExport ? ['Skor', 'Skor Maks', 'Persentase (%)', 'Kesimpulan'] : [];
     const headers = ['No', 'Nama Responden', 'Email', 'Waktu Pengisian', ...questionHeaders, ...scoreHeaders];
 
     const rows = responses.map((r, idx) => {
       const date = new Date(r.submitted_at);
       const answerCols = questions.map(q => {
         const ans = r.answers?.[q.id]?.answer || '';
-        return `"${ans.replace(/"/g, '""')}"`;
+        const suffix = isKuisExport && ans ? (ans === q.correct_answer ? ' [BENAR]' : ' [SALAH]') : '';
+        return `"${(ans + suffix).replace(/"/g, '""')}"`;
       });
       const scoreCols: string[] = [];
-      if (isScored) {
+      if (isScoredExport) {
         const scoreData = calculateScore(r.answers);
         if (scoreData) {
           scoreCols.push(String(scoreData.totalScore), String(scoreData.maxScore), String(scoreData.percentage), `"${scoreData.conclusion}"`);
@@ -395,10 +419,12 @@ function ManageQuizContent() {
                 <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                   survey.survey_type === 'pengetahuan' ? 'bg-purple-100 text-purple-700' :
                   survey.survey_type === 'sikap' ? 'bg-orange-100 text-orange-700' :
+                  survey.survey_type === 'kuis' ? 'bg-green-100 text-green-700' :
                   'bg-slate-100 text-slate-600'
                 }`}>
                   {survey.survey_type === 'pengetahuan' ? 'Pengetahuan (Skor)' :
-                   survey.survey_type === 'sikap' ? 'Sikap (Skor)' : 'Survei'}
+                   survey.survey_type === 'sikap' ? 'Sikap (Skor)' :
+                   survey.survey_type === 'kuis' ? '🎯 Kuis Benar/Salah' : 'Survei'}
                 </span>
                 <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                   survey.randomize_questions ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'
@@ -488,20 +514,41 @@ function ManageQuizContent() {
                     {/* Render Options if any */}
                     {(q.question_type === 'multiple_choice' || q.question_type === 'scale') && Array.isArray(q.options) && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                        {q.options.map((opt: string, i: number) => (
-                          <div key={i} className="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 bg-slate-50 flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full border-2 border-slate-300 shrink-0"></span>
-                            <span className="flex-1">{opt}</span>
-                            {isScored && (
-                              <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Nilai: {i + 1}</span>
-                            )}
-                          </div>
-                        ))}
+                        {q.options.map((opt: string, i: number) => {
+                          const isCorrect = isKuis && opt === q.correct_answer;
+                          return (
+                            <div key={i} className={`px-3 py-2 border rounded-lg text-sm flex items-center gap-2 ${
+                              isCorrect
+                                ? 'border-green-400 bg-green-50 text-green-800 font-semibold'
+                                : 'border-slate-200 bg-slate-50 text-slate-600'
+                            }`}>
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                                isCorrect ? 'bg-green-500 text-white' : 'border-2 border-slate-300'
+                              }`}>
+                                {isCorrect ? '✓' : ['A','B','C','D'][i] || i+1}
+                              </span>
+                              <span className="flex-1">{opt}</span>
+                              {isScored && !isKuis && (
+                                <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Nilai: {i + 1}</span>
+                              )}
+                              {isCorrect && (
+                                <span className="text-[10px] font-bold bg-green-200 text-green-700 px-1.5 py-0.5 rounded">BENAR</span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
-                    {/* Scoring info */}
-                    {isScored && Array.isArray(q.options) && q.options.length > 0 && (
+                    {/* Info box */}
+                    {isKuis && (
+                      <div className="mt-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-[10px] text-green-700 font-medium">
+                          🎯 Jawaban benar: <strong>{q.correct_answer || '(belum diatur)'}</strong>. Siswa akan mendapat animasi benar/salah saat menjawab.
+                        </p>
+                      </div>
+                    )}
+                    {isScored && !isKuis && Array.isArray(q.options) && q.options.length > 0 && (
                       <div className="mt-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-[10px] text-blue-700 font-medium">
                           ℹ️ Skor berdasarkan urutan opsi: opsi ke-1 = 1 poin, ke-2 = 2 poin, ke-3 = 3 poin, ke-4 = 4 poin (tertinggi)
@@ -608,15 +655,29 @@ function ManageQuizContent() {
                                   <p className="text-sm font-medium text-slate-800 mb-2">{q.question_text}</p>
                                   <div className="flex items-start gap-2">
                                     <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded shrink-0 mt-0.5">Jawaban:</span>
-                                    <p className="text-sm text-slate-700">
+                                    <p className="text-sm text-slate-700 flex-1">
                                       {answerData?.answer || <span className="italic text-slate-400">Tidak dijawab</span>}
                                     </p>
-                                    {pointValue !== null && (
+                                    {isKuis && answerData?.answer && (
+                                      <span className={`text-xs font-bold px-2 py-1 rounded shrink-0 mt-0.5 ml-auto ${
+                                        answerData.answer === q.correct_answer
+                                          ? 'text-green-700 bg-green-100'
+                                          : 'text-red-700 bg-red-100'
+                                      }`}>
+                                        {answerData.answer === q.correct_answer ? '✓ Benar' : '✗ Salah'}
+                                      </span>
+                                    )}
+                                    {pointValue !== null && !isKuis && (
                                       <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded shrink-0 mt-0.5 ml-auto">
                                         Nilai: {pointValue}/4
                                       </span>
                                     )}
                                   </div>
+                                  {isKuis && answerData?.answer && answerData.answer !== q.correct_answer && (
+                                    <p className="text-xs text-green-700 mt-1 ml-1">
+                                      Jawaban benar: <strong>{q.correct_answer}</strong>
+                                    </p>
+                                  )}
                                 </div>
                               );
                             })}
@@ -632,10 +693,11 @@ function ManageQuizContent() {
                                     <div>
                                       <p className="text-xs font-bold text-slate-500 uppercase">Kesimpulan</p>
                                       <p className={`text-lg font-extrabold ${
-                                        scoreData.conclusion === 'Tinggi' || scoreData.conclusion === 'Baik'
+                                        scoreData.conclusion === 'Tinggi' || scoreData.conclusion === 'Baik' || scoreData.conclusion === 'Lulus'
                                           ? 'text-green-700' : 'text-red-700'
                                       }`}>
-                                        {survey.survey_type === 'pengetahuan' ? 'Pengetahuan' : 'Sikap'}: {scoreData.conclusion}
+                                        {survey.survey_type === 'pengetahuan' ? 'Pengetahuan' :
+                                         survey.survey_type === 'kuis' ? 'Hasil Kuis' : 'Sikap'}: {scoreData.conclusion}
                                       </p>
                                     </div>
                                     <div className="text-right">
@@ -667,63 +729,99 @@ function ManageQuizContent() {
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
               <h3 className="font-bold text-slate-800">Tambah Pertanyaan Baru</h3>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                &times;
-              </button>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
-            
+
             <div className="overflow-y-auto p-6">
               <form id="questionForm" onSubmit={handleAddQuestion} className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Pertanyaan *</label>
-                  <textarea 
+                  <textarea
                     required
                     value={formData.question_text}
                     onChange={(e) => setFormData({...formData, question_text: e.target.value})}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: Apakah anak Anda minum 8 gelas hari ini?"
+                    placeholder="Contoh: Apa manfaat utama air bagi tubuh manusia?"
                     rows={3}
                   ></textarea>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Tipe Jawaban</label>
-                  <select 
-                    value={formData.question_type}
-                    onChange={(e) => setFormData({...formData, question_type: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="text">Teks Bebas (Isian)</option>
-                    <option value="multiple_choice">Pilihan Ganda</option>
-                    <option value="scale">Skala (Nilai 1-5, dll)</option>
-                  </select>
-                </div>
 
-                {(formData.question_type === 'multiple_choice' || formData.question_type === 'scale') && (
-                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                    <label className="block text-sm font-bold text-blue-800 mb-2">Opsi Jawaban (Format JSON Array)</label>
-                    <p className="text-xs text-blue-600 mb-2">
-                      Gunakan kurung siku dan tanda kutip ganda. Contoh: <code>["Ya", "Tidak"]</code> atau <code>["1", "2", "3"]</code>
-                    </p>
-                    <textarea 
-                      required
-                      value={formData.options}
-                      onChange={(e) => setFormData({...formData, options: e.target.value})}
-                      className="w-full px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                      rows={3}
-                    ></textarea>
+                {/* Kuis Benar/Salah: visual option builder */}
+                {isKuis ? (
+                  <div className="bg-green-50 p-4 rounded-xl border border-green-200 space-y-3">
+                    <label className="block text-sm font-bold text-green-800">Opsi Jawaban & Jawaban Benar</label>
+                    <p className="text-xs text-green-700">Isi opsi A–D, lalu pilih mana yang benar dengan klik tombol radio di kiri.</p>
+                    {kuisOptions.map((opt, idx) => (
+                      <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                        kuisCorrectIndex === idx ? 'border-green-500 bg-green-100' : 'border-slate-200 bg-white'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="kuisCorrect"
+                          checked={kuisCorrectIndex === idx}
+                          onChange={() => setKuisCorrectIndex(idx)}
+                          disabled={!opt.trim()}
+                          className="shrink-0 accent-green-600"
+                        />
+                        <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-black flex items-center justify-center shrink-0">
+                          {['A','B','C','D'][idx]}
+                        </span>
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => {
+                            const next = [...kuisOptions];
+                            next[idx] = e.target.value;
+                            setKuisOptions(next);
+                            if (kuisCorrectIndex === idx && !e.target.value.trim()) setKuisCorrectIndex(null);
+                          }}
+                          placeholder={`Opsi ${['A','B','C','D'][idx]}`}
+                          className="flex-1 px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+                        />
+                        {kuisCorrectIndex === idx && (
+                          <span className="text-xs font-bold text-green-700 bg-green-200 px-2 py-0.5 rounded shrink-0">BENAR</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Tipe Jawaban</label>
+                      <select
+                        value={formData.question_type}
+                        onChange={(e) => setFormData({...formData, question_type: e.target.value})}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="text">Teks Bebas (Isian)</option>
+                        <option value="multiple_choice">Pilihan Ganda</option>
+                        <option value="scale">Skala (Nilai 1-5, dll)</option>
+                      </select>
+                    </div>
+                    {(formData.question_type === 'multiple_choice' || formData.question_type === 'scale') && (
+                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                        <label className="block text-sm font-bold text-blue-800 mb-2">Opsi Jawaban (Format JSON Array)</label>
+                        <p className="text-xs text-blue-600 mb-2">
+                          Gunakan kurung siku dan tanda kutip ganda. Contoh: <code>{`["Ya", "Tidak"]`}</code>
+                        </p>
+                        <textarea
+                          required
+                          value={formData.options}
+                          onChange={(e) => setFormData({...formData, options: e.target.value})}
+                          className="w-full px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                          rows={3}
+                        ></textarea>
+                      </div>
+                    )}
+                  </>
                 )}
               </form>
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3 bg-white shrink-0">
-              <button 
+              <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={handleCloseModal}
                 className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg font-medium hover:bg-slate-50"
                 disabled={isSubmitting}
               >

@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">New Hydra</string>
     <string name="title_activity_main">New Hydra</string>
-    <string name="package_name">id.sivia.new_hydra</string>
-    <string name="custom_url_scheme">id.sivia.new_hydra</string>
+    <string name="package_name">id.sivia.newhydra</string>
+    <string name="custom_url_scheme">id.sivia.newhydra</string>
 </resources>

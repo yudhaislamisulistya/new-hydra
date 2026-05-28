@@ -9,7 +9,7 @@ import { PlayCircle, Award, CheckCircle2 } from "lucide-react";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/supabase/client";
 
-type SurveyType = "survey" | "pengetahuan" | "sikap";
+type SurveyType = "survey" | "pengetahuan" | "sikap" | "kuis";
 
 type EducationMaterial = {
   id: string;
@@ -37,6 +37,7 @@ type SurveyQuestion = {
   question_type: string;
   options: string[] | null;
   order_number: number;
+  correct_answer: string | null;
 };
 
 type SurveyResponseRow = {
@@ -82,6 +83,12 @@ function EducationCard({
 
   const surveyType = material.survey_type || "survey";
   const isScored = surveyType === "pengetahuan" || surveyType === "sikap";
+  const isKuis = surveyType === "kuis";
+
+  // Millionaire animation state (for kuis type)
+  const [answerPhase, setAnswerPhase] = useState<'idle' | 'pending' | 'reveal'>('idle');
+  const [pendingAnswer, setPendingAnswer] = useState<string | null>(null);
+  const [lastAnswerCorrect, setLastAnswerCorrect] = useState<boolean | null>(null);
   const actionLabel = showQuiz
     ? isScored
       ? "Lanjutkan Kuis"
@@ -105,7 +112,7 @@ function EducationCard({
     try {
       const { data, error } = await supabase
         .from("survey_questions")
-        .select("id, question_text, question_type, options, order_number")
+        .select("id, question_text, question_type, options, order_number, correct_answer")
         .eq("survey_id", material.survey_id)
         .order("order_number", { ascending: true });
 
@@ -147,6 +154,31 @@ function EducationCard({
     }
 
     void submitResponses(newAnswers);
+  };
+
+  const handleAnswerKuis = (questionId: string, answer: string, correctAnswer: string | null) => {
+    if (answerPhase !== 'idle' || submitting) return;
+    setPendingAnswer(answer);
+    setAnswerPhase('pending');
+
+    setTimeout(() => {
+      setLastAnswerCorrect(correctAnswer ? answer === correctAnswer : false);
+      setAnswerPhase('reveal');
+
+      setTimeout(() => {
+        const newAnswers = { ...answers, [questionId]: answer };
+        setAnswers(newAnswers);
+        setAnswerPhase('idle');
+        setPendingAnswer(null);
+        setLastAnswerCorrect(null);
+
+        if (currentIndex < questions.length - 1) {
+          setCurrentIndex(currentIndex + 1);
+        } else {
+          void submitResponses(newAnswers);
+        }
+      }, 1400);
+    }, 700);
   };
 
   const handleTextAnswer = (questionId: string, value: string) => {
@@ -208,31 +240,31 @@ function EducationCard({
   };
 
   const getScoreResult = () => {
-    if (!isScored) return null;
+    if (!isScored && !isKuis) return null;
+
+    if (isKuis) {
+      let correct = 0;
+      questions.forEach((q) => {
+        if (answers[q.id] && answers[q.id] === q.correct_answer) correct++;
+      });
+      const maxScore = questions.length;
+      const percentage = maxScore > 0 ? Math.round((correct / maxScore) * 10000) / 100 : 0;
+      return { totalScore: correct, maxScore, percentage, conclusion: percentage >= 70 ? "Lulus" : "Perlu Belajar Lagi" };
+    }
 
     let totalScore = 0;
     const maxScore = questions.length * 4;
-
     questions.forEach((question) => {
       const answer = answers[question.id];
       if (!answer || !Array.isArray(question.options)) return;
-
       const selectedIndex = question.options.indexOf(answer);
-      if (selectedIndex >= 0) {
-        totalScore += selectedIndex + 1;
-      }
+      if (selectedIndex >= 0) totalScore += selectedIndex + 1;
     });
-
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 10000) / 100 : 0;
     const conclusion =
       surveyType === "pengetahuan"
-        ? percentage >= 75
-          ? "Tinggi"
-          : "Rendah"
-        : percentage >= 75
-          ? "Baik"
-          : "Buruk";
-
+        ? percentage >= 75 ? "Tinggi" : "Rendah"
+        : percentage >= 75 ? "Baik" : "Buruk";
     return { totalScore, maxScore, percentage, conclusion };
   };
 
@@ -296,50 +328,105 @@ function EducationCard({
       </Card>
 
       {showQuiz && currentQuestion && !isCompleted && (
-        <Card className="border-2 border-blue-500 shadow-md animate-fade-in-up">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-              <span>
-                Pertanyaan {currentIndex + 1} / {questions.length}
-              </span>
-              <span>{Math.round(progress)}%</span>
-            </div>
+        isKuis ? (
+          /* ── MILLIONAIRE STYLE for kuis type ── */
+          <div className="rounded-2xl overflow-hidden shadow-xl animate-fade-in-up">
+            {/* Dark header: progress + question */}
+            <div className="bg-gradient-to-b from-slate-900 to-blue-950 p-5">
+              <div className="flex justify-between text-xs font-bold text-blue-300 mb-3">
+                <span>Soal {currentIndex + 1} / {questions.length}</span>
+                <span>{Math.round(progress)}%</span>
+              </div>
+              <ProgressBar progress={progress} />
 
-            <ProgressBar progress={progress} />
-
-            <div className="pt-2">
-              <h3 className="font-bold text-slate-800 text-lg leading-snug">{currentQuestion.question_text}</h3>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              {currentQuestion.question_type === "text" && surveyType === "survey" ? (
-                <div>
-                  <textarea
-                    className="w-full border rounded-xl p-3 text-sm focus:ring-2 outline-none border-slate-200"
-                    rows={3}
-                    placeholder="Tulis jawaban kamu di sini..."
-                    value={answers[currentQuestion.id] || ""}
-                    onChange={(event) => handleTextAnswer(currentQuestion.id, event.target.value)}
-                  ></textarea>
-                  <Button onClick={submitTextAndNext} className="w-full mt-3" disabled={submitting}>
-                    {currentIndex < questions.length - 1 ? "Lanjut" : submitting ? "Mengirim..." : "Kirim Jawaban"}
-                  </Button>
+              {/* Feedback badge */}
+              {answerPhase === 'reveal' && (
+                <div className={`mt-4 flex items-center justify-center gap-2 py-2 px-4 rounded-full font-black text-base animate-bounce mx-auto w-fit ${
+                  lastAnswerCorrect ? 'bg-green-400 text-white' : 'bg-red-500 text-white'
+                }`}>
+                  {lastAnswerCorrect ? '✓ BENAR!' : '✗ SALAH!'}
                 </div>
-              ) : (
-                (questionOptionOrders[currentQuestion.id] || (Array.isArray(currentQuestion.options) ? currentQuestion.options : [])).map((option, index) => (
-                  <button
-                    key={`${currentQuestion.id}-${index}`}
-                    onClick={() => handleAnswer(currentQuestion.id, option)}
-                    disabled={submitting}
-                    className="w-full p-4 text-left border rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {option}
-                  </button>
-                ))
               )}
+
+              <div className="mt-4 bg-blue-900/60 rounded-2xl p-4 border border-blue-700/40">
+                <h3 className="text-white font-bold text-base leading-snug text-center">
+                  {currentQuestion.question_text}
+                </h3>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+
+            {/* Options grid */}
+            <div className="bg-slate-800 p-4 grid grid-cols-2 gap-3">
+              {(questionOptionOrders[currentQuestion.id] || (Array.isArray(currentQuestion.options) ? currentQuestion.options : [])).map((opt, idx) => {
+                const letter = ['A', 'B', 'C', 'D'][idx] ?? String(idx + 1);
+                let style = 'bg-blue-800 border-blue-600 hover:bg-blue-700 text-white';
+                if (answerPhase === 'pending' && pendingAnswer === opt) {
+                  style = 'bg-amber-500 border-amber-400 text-white scale-[1.03]';
+                } else if (answerPhase === 'reveal') {
+                  if (opt === currentQuestion.correct_answer) {
+                    style = 'bg-green-500 border-green-400 text-white';
+                  } else if (opt === pendingAnswer) {
+                    style = 'bg-red-600 border-red-500 text-white';
+                  } else {
+                    style = 'bg-slate-700 border-slate-600 text-slate-400';
+                  }
+                }
+                return (
+                  <button
+                    key={`${currentQuestion.id}-${idx}`}
+                    onClick={() => handleAnswerKuis(currentQuestion.id, opt, currentQuestion.correct_answer)}
+                    disabled={answerPhase !== 'idle' || submitting}
+                    className={`p-3 border-2 rounded-xl text-sm font-bold transition-all duration-500 text-left flex items-center gap-2 disabled:cursor-default ${style}`}
+                  >
+                    <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-black shrink-0">{letter}</span>
+                    <span className="flex-1 leading-snug">{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* ── Standard quiz card for other types ── */
+          <Card className="border-2 border-blue-500 shadow-md animate-fade-in-up">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
+                <span>Pertanyaan {currentIndex + 1} / {questions.length}</span>
+                <span>{Math.round(progress)}%</span>
+              </div>
+              <ProgressBar progress={progress} />
+              <div className="pt-2">
+                <h3 className="font-bold text-slate-800 text-lg leading-snug">{currentQuestion.question_text}</h3>
+              </div>
+              <div className="space-y-3 pt-2">
+                {currentQuestion.question_type === "text" && surveyType === "survey" ? (
+                  <div>
+                    <textarea
+                      className="w-full border rounded-xl p-3 text-sm focus:ring-2 outline-none border-slate-200"
+                      rows={3}
+                      placeholder="Tulis jawaban kamu di sini..."
+                      value={answers[currentQuestion.id] || ""}
+                      onChange={(event) => handleTextAnswer(currentQuestion.id, event.target.value)}
+                    ></textarea>
+                    <Button onClick={submitTextAndNext} className="w-full mt-3" disabled={submitting}>
+                      {currentIndex < questions.length - 1 ? "Lanjut" : submitting ? "Mengirim..." : "Kirim Jawaban"}
+                    </Button>
+                  </div>
+                ) : (
+                  (questionOptionOrders[currentQuestion.id] || (Array.isArray(currentQuestion.options) ? currentQuestion.options : [])).map((option, index) => (
+                    <button
+                      key={`${currentQuestion.id}-${index}`}
+                      onClick={() => handleAnswer(currentQuestion.id, option)}
+                      disabled={submitting}
+                      className="w-full p-4 text-left border rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {option}
+                    </button>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )
       )}
 
       {showResult && (
@@ -356,26 +443,29 @@ function EducationCard({
           {scoreResult && (
             <div
               className={`w-full max-w-xs rounded-2xl p-5 mt-1 mb-5 ${
-                scoreResult.conclusion === "Tinggi" || scoreResult.conclusion === "Baik"
+                scoreResult.conclusion === "Tinggi" || scoreResult.conclusion === "Baik" || scoreResult.conclusion === "Lulus"
                   ? "bg-green-50 border-2 border-green-300"
                   : "bg-red-50 border-2 border-red-300"
               }`}
             >
               <p className="text-xs font-bold text-slate-500 uppercase mb-1">
-                {surveyType === "pengetahuan" ? "Skor Pengetahuan" : "Skor Sikap"}
+                {surveyType === "pengetahuan" ? "Skor Pengetahuan" :
+                 surveyType === "kuis" ? "Hasil Kuis" : "Skor Sikap"}
               </p>
               <p className="text-4xl font-extrabold text-slate-800">{scoreResult.percentage}%</p>
               <p className="text-sm text-slate-500 mt-1">
-                Skor: {scoreResult.totalScore} / {scoreResult.maxScore}
+                {isKuis
+                  ? `Benar: ${scoreResult.totalScore} / ${scoreResult.maxScore} soal`
+                  : `Skor: ${scoreResult.totalScore} / ${scoreResult.maxScore}`}
               </p>
               <p
                 className={`text-lg font-extrabold mt-2 ${
-                  scoreResult.conclusion === "Tinggi" || scoreResult.conclusion === "Baik"
+                  scoreResult.conclusion === "Tinggi" || scoreResult.conclusion === "Baik" || scoreResult.conclusion === "Lulus"
                     ? "text-green-700"
                     : "text-red-700"
                 }`}
               >
-                Kesimpulan: {scoreResult.conclusion}
+                {isKuis ? scoreResult.conclusion : `Kesimpulan: ${scoreResult.conclusion}`}
               </p>
             </div>
           )}

@@ -30,6 +30,7 @@ type SurveyQuestionRow = {
   question_type: string;
   options: string[] | null;
   order_number: number;
+  correct_answer: string | null;
 };
 
 function shuffleArray<T>(items: T[]) {
@@ -63,6 +64,11 @@ export default function SurveyPage() {
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showResult, setShowResult] = useState(false);
+
+  // Millionaire animation state (for kuis type)
+  const [answerPhase, setAnswerPhase] = useState<'idle' | 'pending' | 'reveal'>('idle');
+  const [pendingAnswer, setPendingAnswer] = useState<string | null>(null);
+  const [lastAnswerCorrect, setLastAnswerCorrect] = useState<boolean | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -120,7 +126,7 @@ export default function SurveyPage() {
     try {
       const { data, error } = await supabase
         .from('survey_questions')
-        .select('*')
+        .select('id, question_text, question_type, options, order_number, correct_answer')
         .eq('survey_id', survey.id)
         .order('order_number', { ascending: true });
 
@@ -160,9 +166,33 @@ export default function SurveyPage() {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      // All questions answered, submit
       submitResponses(newAnswers);
     }
+  };
+
+  const handleAnswerKuis = (questionId: string, answer: string, correctAnswer: string | null) => {
+    if (answerPhase !== 'idle' || submitting) return;
+    setPendingAnswer(answer);
+    setAnswerPhase('pending');
+
+    setTimeout(() => {
+      setLastAnswerCorrect(correctAnswer ? answer === correctAnswer : false);
+      setAnswerPhase('reveal');
+
+      setTimeout(() => {
+        const newAnswers = { ...answers, [questionId]: answer };
+        setAnswers(newAnswers);
+        setAnswerPhase('idle');
+        setPendingAnswer(null);
+        setLastAnswerCorrect(null);
+
+        if (currentIndex < questions.length - 1) {
+          setCurrentIndex(currentIndex + 1);
+        } else {
+          submitResponses(newAnswers);
+        }
+      }, 1400);
+    }, 700);
   };
 
   const submitResponses = async (finalAnswers: Record<string, string>) => {
@@ -211,10 +241,22 @@ export default function SurveyPage() {
     setShowResult(false);
   };
 
-  // ── SCORE CALCULATION for scored quizzes ──
-  // Score based on option order: option[0]=1pt, option[1]=2pt, option[2]=3pt, option[3]=4pt
+  // ── SCORE CALCULATION ──
   const getScoreResult = () => {
-    if (!activeSurvey || (activeSurvey.survey_type !== 'pengetahuan' && activeSurvey.survey_type !== 'sikap')) return null;
+    if (!activeSurvey) return null;
+    const type = activeSurvey.survey_type;
+
+    if (type === 'kuis') {
+      let correct = 0;
+      questions.forEach(q => {
+        if (answers[q.id] && answers[q.id] === q.correct_answer) correct++;
+      });
+      const maxScore = questions.length;
+      const percentage = maxScore > 0 ? Math.round((correct / maxScore) * 10000) / 100 : 0;
+      return { totalScore: correct, maxScore, percentage, conclusion: percentage >= 70 ? 'Lulus' : 'Perlu Belajar Lagi' };
+    }
+
+    if (type !== 'pengetahuan' && type !== 'sikap') return null;
     let totalScore = 0;
     const maxScore = questions.length * 4;
     questions.forEach(q => {
@@ -225,7 +267,7 @@ export default function SurveyPage() {
       }
     });
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 10000) / 100 : 0;
-    const conclusion = activeSurvey.survey_type === 'pengetahuan'
+    const conclusion = type === 'pengetahuan'
       ? (percentage >= 75 ? 'Tinggi' : 'Rendah')
       : (percentage >= 75 ? 'Baik' : 'Buruk');
     return { totalScore, maxScore, percentage, conclusion };
@@ -249,19 +291,24 @@ export default function SurveyPage() {
 
           {scoreResult && (
             <div className={`w-full max-w-xs rounded-2xl p-5 mt-4 mb-4 ${
-              scoreResult.conclusion === 'Tinggi' || scoreResult.conclusion === 'Baik'
+              scoreResult.conclusion === 'Tinggi' || scoreResult.conclusion === 'Baik' || scoreResult.conclusion === 'Lulus'
                 ? 'bg-green-50 border-2 border-green-300' : 'bg-red-50 border-2 border-red-300'
             }`}>
               <p className="text-xs font-bold text-slate-500 uppercase mb-1">
-                {activeSurvey.survey_type === 'pengetahuan' ? 'Skor Pengetahuan' : 'Skor Sikap'}
+                {activeSurvey.survey_type === 'pengetahuan' ? 'Skor Pengetahuan' :
+                 activeSurvey.survey_type === 'kuis' ? 'Hasil Kuis' : 'Skor Sikap'}
               </p>
               <p className="text-4xl font-extrabold text-slate-800">{scoreResult.percentage}%</p>
-              <p className="text-sm text-slate-500 mt-1">Skor: {scoreResult.totalScore} / {scoreResult.maxScore}</p>
+              <p className="text-sm text-slate-500 mt-1">
+                {activeSurvey.survey_type === 'kuis'
+                  ? `Benar: ${scoreResult.totalScore} / ${scoreResult.maxScore} soal`
+                  : `Skor: ${scoreResult.totalScore} / ${scoreResult.maxScore}`}
+              </p>
               <p className={`text-lg font-extrabold mt-2 ${
-                scoreResult.conclusion === 'Tinggi' || scoreResult.conclusion === 'Baik'
+                scoreResult.conclusion === 'Tinggi' || scoreResult.conclusion === 'Baik' || scoreResult.conclusion === 'Lulus'
                   ? 'text-green-700' : 'text-red-700'
               }`}>
-                Kesimpulan: {scoreResult.conclusion}
+                {activeSurvey.survey_type === 'kuis' ? scoreResult.conclusion : `Kesimpulan: ${scoreResult.conclusion}`}
               </p>
             </div>
           )}
@@ -281,6 +328,73 @@ export default function SurveyPage() {
   if (activeSurvey && questions.length > 0) {
     const progress = ((currentIndex + 1) / questions.length) * 100;
     const currentQ = questions[currentIndex];
+    const isKuis = activeSurvey.survey_type === 'kuis';
+    const displayedOptions = questionOptionOrders[currentQ.id] || (Array.isArray(currentQ.options) ? currentQ.options : []);
+
+    if (isKuis) {
+      return (
+        <>
+          <Header title={activeSurvey.title} />
+          <div className="p-4">
+            <div className="rounded-2xl overflow-hidden shadow-xl">
+              {/* Dark header */}
+              <div className="bg-gradient-to-b from-slate-900 to-blue-950 p-5">
+                <div className="flex justify-between text-xs font-bold text-blue-300 mb-3">
+                  <span>Soal {currentIndex + 1} / {questions.length}</span>
+                  <span>{Math.round(progress)}%</span>
+                </div>
+                <ProgressBar progress={progress} />
+
+                {/* Feedback badge */}
+                {answerPhase === 'reveal' && (
+                  <div className={`mt-4 flex items-center justify-center gap-2 py-2 px-4 rounded-full font-black text-base animate-bounce mx-auto w-fit ${
+                    lastAnswerCorrect ? 'bg-green-400 text-white' : 'bg-red-500 text-white'
+                  }`}>
+                    {lastAnswerCorrect ? '✓ BENAR!' : '✗ SALAH!'}
+                  </div>
+                )}
+
+                <div className="mt-4 bg-blue-900/60 rounded-2xl p-4 border border-blue-700/40">
+                  <h3 className="text-white font-bold text-base leading-snug text-center">
+                    {currentQ.question_text}
+                  </h3>
+                </div>
+              </div>
+
+              {/* Options grid */}
+              <div className="bg-slate-800 p-4 grid grid-cols-2 gap-3">
+                {displayedOptions.map((opt: string, idx: number) => {
+                  const letter = ['A', 'B', 'C', 'D'][idx] ?? String(idx + 1);
+                  let style = 'bg-blue-800 border-blue-600 hover:bg-blue-700 text-white';
+                  if (answerPhase === 'pending' && pendingAnswer === opt) {
+                    style = 'bg-amber-500 border-amber-400 text-white scale-[1.03]';
+                  } else if (answerPhase === 'reveal') {
+                    if (opt === currentQ.correct_answer) {
+                      style = 'bg-green-500 border-green-400 text-white';
+                    } else if (opt === pendingAnswer) {
+                      style = 'bg-red-600 border-red-500 text-white';
+                    } else {
+                      style = 'bg-slate-700 border-slate-600 text-slate-400';
+                    }
+                  }
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleAnswerKuis(currentQ.id, opt, currentQ.correct_answer)}
+                      disabled={answerPhase !== 'idle' || submitting}
+                      className={`p-3 border-2 rounded-xl text-sm font-bold transition-all duration-500 text-left flex items-center gap-2 disabled:cursor-default ${style}`}
+                    >
+                      <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-black shrink-0">{letter}</span>
+                      <span className="flex-1 leading-snug">{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
 
     return (
       <>
@@ -301,21 +415,16 @@ export default function SurveyPage() {
           </Card>
 
           <div className="grid gap-3 mt-6">
-            {(() => {
-              const options: string[] = Array.isArray(currentQ.options) ? currentQ.options : [];
-              const displayedOptions = questionOptionOrders[currentQ.id] || options;
-
-              return displayedOptions.map((opt: string, idx: number) => (
-                <button
-                  key={idx}
-                  onClick={() => handleAnswer(currentQ.id, opt)}
-                  disabled={submitting}
-                  className="w-full p-4 text-left border border-slate-200 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all active:scale-[0.98] disabled:opacity-50"
-                >
-                  {opt}
-                </button>
-              ));
-            })()}
+            {displayedOptions.map((opt: string, idx: number) => (
+              <button
+                key={idx}
+                onClick={() => handleAnswer(currentQ.id, opt)}
+                disabled={submitting}
+                className="w-full p-4 text-left border border-slate-200 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                {opt}
+              </button>
+            ))}
           </div>
         </div>
       </>

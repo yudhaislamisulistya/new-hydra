@@ -1,4 +1,4 @@
-package id.sivia.new_hydra;
+package id.sivia.newhydra;
 
 import com.getcapacitor.BridgeActivity;
 

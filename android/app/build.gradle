@@ -7,10 +7,10 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace "id.sivia.new_hydra"
+    namespace "id.sivia.newhydra"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "id.sivia.new_hydra"
+        applicationId "id.sivia.newhydra"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2
