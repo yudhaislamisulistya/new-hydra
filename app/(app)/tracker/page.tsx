@@ -51,12 +51,12 @@ const REINFORCEMENT_VIDEOS = {
   adequate: {
     title: "Video Penegasan Saat Status Adekuat",
     description: "Target minum kamu sudah tercapai. Tonton video ini untuk mempertahankan kebiasaan minum yang baik setiap hari.",
-    url: "",
+    url: "https://youtu.be/8fSwKbFVc4I",
   },
   inadequate: {
     title: "Video Penegasan Saat Status Tidak Adekuat",
     description: "Target minum kamu belum tercapai. Tonton video ini untuk penguatan tentang pentingnya menambah cairan tubuh.",
-    url: "",
+    url: "https://youtu.be/hKAyZiVDW-4",
   },
 } as const;
 

@@ -10,19 +10,17 @@ export default function SplashScreen() {
   const supabase = createClient();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      setTimeout(() => {
-        if (session) {
-          router.push("/dashboard");
-        } else {
-          router.push("/auth");
-        }
-      }, 2500); // 2.5 seconds splash
-    };
+    let hasSession = false;
 
-    checkAuth();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      hasSession = !!session;
+    });
+
+    const timer = setTimeout(() => {
+      router.push(hasSession ? "/dashboard" : "/auth");
+    }, 2500);
+
+    return () => clearTimeout(timer);
   }, [router, supabase.auth]);
 
   return (
