@@ -92,10 +92,10 @@ function EducationCard({
   const actionLabel = showQuiz
     ? isScored
       ? "Lanjutkan Kuis"
-      : "Lanjutkan Survei"
+      : "Lanjutkan Kuis"
     : isScored
       ? "Mulai Kuis"
-      : "Mulai Survei";
+      : "Mulai Kuis";
 
   const handleStartQuiz = async () => {
     if (!material.survey_id || isCompleted) return;
@@ -303,12 +303,12 @@ function EducationCard({
                   <CheckCircle2 size={18} className="text-green-600 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-green-700">
-                      {isScored ? "Kuis sudah dikerjakan." : "Survei sudah dikirim."}
+                      {isScored ? "Kuis sudah dikerjakan." : "Kuis sudah dikirim."}
                     </p>
                     <p className="text-xs text-green-700/80 mt-0.5">
                       {isScored
                         ? "Kuis untuk video ini tidak perlu diisi lagi."
-                        : "Survei untuk video ini sudah tercatat."}
+                        : "Kuis untuk video ini sudah tercatat."}
                     </p>
                   </div>
                 </div>
@@ -437,7 +437,7 @@ function EducationCard({
           </div>
           <h3 className="text-xl font-extrabold text-slate-800 mb-2">Hebat Sekali!</h3>
           <p className="text-slate-600 mb-4 text-sm max-w-[250px] mx-auto">
-            Kamu telah menyelesaikan <b>{isScored ? "kuis" : "survei"}</b> untuk materi <b>{material.title}</b>.
+            Kamu telah menyelesaikan <b>kuis</b> untuk materi <b>{material.title}</b>.
           </p>
 
           {scoreResult && (
@@ -472,7 +472,7 @@ function EducationCard({
 
           {!scoreResult && (
             <p className="text-xs text-slate-400 mb-5 max-w-[260px]">
-              Jawaban survei kamu sudah tersimpan. Terima kasih sudah memberikan respon.
+              Jawaban kuis kamu sudah tersimpan. Terima kasih sudah memberikan respon.
             </p>
           )}
 
