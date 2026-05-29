@@ -653,19 +653,29 @@ export default function EducationPage() {
             <h3 className="text-lg font-bold text-slate-700">Belum ada video</h3>
             <p className="text-sm text-slate-500 mt-1">Admin belum menambahkan materi edukasi.</p>
           </div>
-        ) : !profile?.id ? null : (
-          materials.map((material, index) => (
+        ) : !profile?.id ? null : (() => {
+          const todayMaterial = materials[dayIndex];
+          if (!todayMaterial) {
+            return (
+              <div className="py-20 text-center bg-white rounded-2xl border border-dashed border-slate-300 shadow-sm">
+                <CheckCircle2 size={48} className="mx-auto text-green-400 mb-3" />
+                <h3 className="text-lg font-bold text-slate-700">Semua Materi Selesai!</h3>
+                <p className="text-sm text-slate-500 mt-1">Kamu sudah menyelesaikan seluruh video edukasi. Luar biasa!</p>
+              </div>
+            );
+          }
+          return (
             <EducationCard
-              key={material.id}
-              material={material}
+              key={todayMaterial.id}
+              material={todayMaterial}
               userId={profile.id}
-              isCompleted={material.survey_id ? completedSurveyIds.has(material.survey_id) : false}
+              isCompleted={todayMaterial.survey_id ? completedSurveyIds.has(todayMaterial.survey_id) : false}
               onCompleted={handleCompletedSurvey}
-              isLocked={index > dayIndex}
-              dayNumber={index + 1}
+              isLocked={false}
+              dayNumber={dayIndex + 1}
             />
-          ))
-        )}
+          );
+        })()}
       </div>
     </>
   );
