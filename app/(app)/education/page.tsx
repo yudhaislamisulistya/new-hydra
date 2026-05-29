@@ -53,6 +53,18 @@ function shuffleArray<T>(items: T[]) {
   return next;
 }
 
+// Acak deterministik: seed yang sama → urutan yang sama
+function seededShuffle<T>(items: T[], seed: number): T[] {
+  const result = [...items];
+  let s = (seed + 1) * 1664525 + 1013904223;
+  for (let i = result.length - 1; i > 0; i--) {
+    s = Math.abs((s * 1664525 + 1013904223) & 0x7fffffff);
+    const j = s % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 // Helper to extract YouTube video ID
 const getYouTubeId = (url: string | null) => {
   if (!url) return null;
@@ -66,46 +78,16 @@ function EducationCard({
   userId,
   isCompleted,
   onCompleted,
-  isLocked,
-  dayNumber,
+  cumulativeDay,
+  dayName,
 }: {
   material: EducationMaterial;
   userId: string;
   isCompleted: boolean;
   onCompleted: (surveyId: string) => void;
-  isLocked: boolean;
-  dayNumber: number;
+  cumulativeDay: number;
+  dayName: string;
 }) {
-  if (isLocked) {
-    return (
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
-            Hari ke-{dayNumber}
-          </span>
-        </div>
-        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden">
-          <div className="relative w-full pt-[56.25%] bg-slate-200">
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-              <Lock size={36} className="text-slate-400" />
-              <p className="text-xs font-bold text-slate-400">Video terkunci</p>
-            </div>
-          </div>
-          <div className="p-5 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
-              <CalendarDays size={20} className="text-slate-400" />
-            </div>
-            <div>
-              <p className="font-bold text-slate-400 text-sm">{material.title}</p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Tersedia pada Hari ke-{dayNumber}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
   const [showQuiz, setShowQuiz] = useState(false);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
@@ -130,6 +112,9 @@ function EducationCard({
     : isScored
       ? "Mulai Kuis"
       : "Mulai Kuis";
+
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [todayQuestionNumber, setTodayQuestionNumber] = useState(1);
 
   const handleStartQuiz = async () => {
     if (!material.survey_id || isCompleted) return;
@@ -157,16 +142,27 @@ function EducationCard({
         return;
       }
 
-      const fetchedQuestions = (data as SurveyQuestion[]) || [];
-      const nextQuestions = material.randomize_questions ? shuffleArray(fetchedQuestions) : fetchedQuestions;
-      const nextOptionOrders = nextQuestions.reduce<Record<string, string[]>>((acc, question) => {
-        const options = Array.isArray(question.options) ? question.options : [];
-        acc[question.id] = material.randomize_options ? shuffleArray(options) : options;
-        return acc;
-      }, {});
+      const allQuestions = data as SurveyQuestion[];
+      const n = allQuestions.length;
+      setTotalQuestions(n);
 
-      setQuestions(nextQuestions);
-      setQuestionOptionOrders(nextOptionOrders);
+      // Hitung siklus & posisi dalam siklus
+      // Misal 10 soal: hari 1-10 = siklus 0, hari 11-20 = siklus 1, dst.
+      const cycleNum = Math.floor(cumulativeDay / n);
+      const posInCycle = cumulativeDay % n;
+
+      // Acak urutan soal deterministik berdasarkan siklus
+      // Siklus berbeda → urutan acak berbeda
+      const shuffledQuestions = seededShuffle(allQuestions, cycleNum);
+      const todayQ = shuffledQuestions[posInCycle];
+      setTodayQuestionNumber(posInCycle + 1);
+
+      const displayedOptions = material.randomize_options && Array.isArray(todayQ.options)
+        ? shuffleArray([...todayQ.options])
+        : (Array.isArray(todayQ.options) ? [...todayQ.options] : []);
+
+      setQuestions([todayQ]);
+      setQuestionOptionOrders({ [todayQ.id]: displayedOptions });
       setCurrentIndex(0);
       setAnswers({});
       setShowQuiz(true);
@@ -307,18 +303,15 @@ function EducationCard({
   const scoreResult = getScoreResult();
   const ytId = getYouTubeId(material.media_url);
 
-  const DAY_NAMES = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-  const dayName = DAY_NAMES[dayNumber] ?? `Hari ke-${dayNumber}`;
-
   return (
     <div className="space-y-4 mb-10">
       <div className="flex items-center gap-2">
         <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full">
-          Hari ke-{dayNumber} — {dayName}
+          {dayName}
         </span>
         {isCompleted && (
           <span className="text-xs font-bold text-green-700 bg-green-100 px-2.5 py-1 rounded-full flex items-center gap-1">
-            <CheckCircle2 size={11} /> Selesai
+            <CheckCircle2 size={11} /> Kuis hari ini selesai
           </span>
         )}
       </div>
@@ -381,10 +374,9 @@ function EducationCard({
             {/* Dark header: progress + question */}
             <div className="bg-gradient-to-b from-slate-900 to-blue-950 p-5">
               <div className="flex justify-between text-xs font-bold text-blue-300 mb-3">
-                <span>Soal {currentIndex + 1} / {questions.length}</span>
-                <span>{Math.round(progress)}%</span>
+                <span>Soal ke-{todayQuestionNumber} dari {totalQuestions}</span>
+                <span>{dayName}</span>
               </div>
-              <ProgressBar progress={progress} />
 
               {/* Feedback badge */}
               {answerPhase === 'reveal' && (
@@ -437,10 +429,9 @@ function EducationCard({
           <Card className="border-2 border-blue-500 shadow-md animate-fade-in-up">
             <CardContent className="p-6 space-y-4">
               <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-                <span>Pertanyaan {currentIndex + 1} / {questions.length}</span>
-                <span>{Math.round(progress)}%</span>
+                <span>Soal ke-{todayQuestionNumber} dari {totalQuestions}</span>
+                <span>{dayName}</span>
               </div>
-              <ProgressBar progress={progress} />
               <div className="pt-2">
                 <h3 className="font-bold text-slate-800 text-lg leading-snug">{currentQuestion.question_text}</h3>
               </div>
@@ -540,12 +531,19 @@ function EducationCard({
   );
 }
 
+const DAY_NAMES = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
 export default function EducationPage() {
   const { profile } = useUserStore();
   const [materials, setMaterials] = useState<EducationMaterial[]>([]);
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [dayIndex, setDayIndex] = useState(0);
+  const [cumulativeDay, setCumulativeDay] = useState(0);
+
+  // Label hari untuk tampilan (Senin, Selasa, dst.)
+  const jsDay = new Date().getDay();
+  const dayNumber = jsDay === 0 ? 7 : jsDay;
+  const dayName = `Hari ke-${dayNumber} — ${DAY_NAMES[dayNumber]}`;
 
   useEffect(() => {
     async function fetchEducation() {
@@ -553,10 +551,16 @@ export default function EducationPage() {
 
       const supabase = createClient();
 
-      // Hari ke-1=Senin, ke-2=Selasa, ..., ke-7=Minggu
-      const jsDay = new Date().getDay(); // 0=Minggu, 1=Senin, ..., 6=Sabtu
-      const dayNumber = jsDay === 0 ? 7 : jsDay;  // 1=Senin ... 7=Minggu
-      setDayIndex(dayNumber - 1);
+      // Hitung hari kumulatif sejak akun dibuat (untuk rotasi soal)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.created_at) {
+        const created = new Date(user.created_at);
+        const today = new Date();
+        created.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        const elapsed = Math.floor((today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+        setCumulativeDay(elapsed);
+      }
 
       try {
         const { data: materialsData, error: materialsError } = await supabase
@@ -587,11 +591,15 @@ export default function EducationPage() {
             surveyMap.set(survey.id, survey);
           });
 
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+
           const { data: responsesData, error: responsesError } = await supabase
             .from("survey_responses")
             .select("survey_id")
             .eq("respondent_id", profile.id)
-            .in("survey_id", surveyIds);
+            .in("survey_id", surveyIds)
+            .gte("submitted_at", todayStart.toISOString());
 
           if (responsesError) throw responsesError;
 
@@ -650,21 +658,19 @@ export default function EducationPage() {
             <h3 className="text-lg font-bold text-slate-700">Belum ada video</h3>
             <p className="text-sm text-slate-500 mt-1">Admin belum menambahkan materi edukasi.</p>
           </div>
-        ) : !profile?.id ? null : (() => {
-          const videoIndex = dayIndex % materials.length;
-          const todayMaterial = materials[videoIndex];
-          return (
+        ) : !profile?.id ? null : (
+          materials.map((material) => (
             <EducationCard
-              key={todayMaterial.id}
-              material={todayMaterial}
+              key={material.id}
+              material={material}
               userId={profile.id}
-              isCompleted={todayMaterial.survey_id ? completedSurveyIds.has(todayMaterial.survey_id) : false}
+              isCompleted={material.survey_id ? completedSurveyIds.has(material.survey_id) : false}
               onCompleted={handleCompletedSurvey}
-              isLocked={false}
-              dayNumber={dayIndex + 1}
+              cumulativeDay={cumulativeDay}
+              dayName={dayName}
             />
-          );
-        })()}
+          ))
+        )}
       </div>
     </>
   );
