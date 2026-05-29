@@ -5,7 +5,7 @@ import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { ProgressBar } from "../../../components/ui/ProgressBar";
-import { PlayCircle, Award, CheckCircle2 } from "lucide-react";
+import { PlayCircle, Award, CheckCircle2, Lock, CalendarDays } from "lucide-react";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/supabase/client";
 
@@ -66,12 +66,46 @@ function EducationCard({
   userId,
   isCompleted,
   onCompleted,
+  isLocked,
+  dayNumber,
 }: {
   material: EducationMaterial;
   userId: string;
   isCompleted: boolean;
   onCompleted: (surveyId: string) => void;
+  isLocked: boolean;
+  dayNumber: number;
 }) {
+  if (isLocked) {
+    return (
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
+            Hari ke-{dayNumber}
+          </span>
+        </div>
+        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden">
+          <div className="relative w-full pt-[56.25%] bg-slate-200">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <Lock size={36} className="text-slate-400" />
+              <p className="text-xs font-bold text-slate-400">Video terkunci</p>
+            </div>
+          </div>
+          <div className="p-5 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+              <CalendarDays size={20} className="text-slate-400" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-400 text-sm">{material.title}</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Tersedia pada Hari ke-{dayNumber}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const [showQuiz, setShowQuiz] = useState(false);
   const [questions, setQuestions] = useState<SurveyQuestion[]>([]);
   const [loadingQuiz, setLoadingQuiz] = useState(false);
@@ -275,6 +309,16 @@ function EducationCard({
 
   return (
     <div className="space-y-4 mb-10">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full">
+          Hari ke-{dayNumber}
+        </span>
+        {isCompleted && (
+          <span className="text-xs font-bold text-green-700 bg-green-100 px-2.5 py-1 rounded-full flex items-center gap-1">
+            <CheckCircle2 size={11} /> Selesai
+          </span>
+        )}
+      </div>
       <Card className="overflow-hidden shadow-sm">
         <div className="relative w-full pt-[56.25%] bg-slate-800">
           {ytId ? (
@@ -498,12 +542,24 @@ export default function EducationPage() {
   const [materials, setMaterials] = useState<EducationMaterial[]>([]);
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [dayIndex, setDayIndex] = useState(0);
 
   useEffect(() => {
     async function fetchEducation() {
       if (!profile?.id) return;
 
       const supabase = createClient();
+
+      // Hitung hari sejak akun dibuat (Hari ke-1 = hari pertama daftar)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.created_at) {
+        const createdDate = new Date(user.created_at);
+        const today = new Date();
+        createdDate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        const elapsed = Math.floor((today.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
+        setDayIndex(elapsed);
+      }
 
       try {
         const { data: materialsData, error: materialsError } = await supabase
@@ -598,13 +654,15 @@ export default function EducationPage() {
             <p className="text-sm text-slate-500 mt-1">Admin belum menambahkan materi edukasi.</p>
           </div>
         ) : !profile?.id ? null : (
-          materials.map((material) => (
+          materials.map((material, index) => (
             <EducationCard
               key={material.id}
               material={material}
               userId={profile.id}
               isCompleted={material.survey_id ? completedSurveyIds.has(material.survey_id) : false}
               onCompleted={handleCompletedSurvey}
+              isLocked={index > dayIndex}
+              dayNumber={index + 1}
             />
           ))
         )}
