@@ -307,11 +307,14 @@ function EducationCard({
   const scoreResult = getScoreResult();
   const ytId = getYouTubeId(material.media_url);
 
+  const DAY_NAMES = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+  const dayName = DAY_NAMES[dayNumber] ?? `Hari ke-${dayNumber}`;
+
   return (
     <div className="space-y-4 mb-10">
       <div className="flex items-center gap-2">
         <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full">
-          Hari ke-{dayNumber}
+          Hari ke-{dayNumber} — {dayName}
         </span>
         {isCompleted && (
           <span className="text-xs font-bold text-green-700 bg-green-100 px-2.5 py-1 rounded-full flex items-center gap-1">
@@ -550,16 +553,10 @@ export default function EducationPage() {
 
       const supabase = createClient();
 
-      // Hitung hari sejak akun dibuat (Hari ke-1 = hari pertama daftar)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.created_at) {
-        const createdDate = new Date(user.created_at);
-        const today = new Date();
-        createdDate.setHours(0, 0, 0, 0);
-        today.setHours(0, 0, 0, 0);
-        const elapsed = Math.floor((today.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
-        setDayIndex(elapsed);
-      }
+      // Hari ke-1=Senin, ke-2=Selasa, ..., ke-7=Minggu
+      const jsDay = new Date().getDay(); // 0=Minggu, 1=Senin, ..., 6=Sabtu
+      const dayNumber = jsDay === 0 ? 7 : jsDay;  // 1=Senin ... 7=Minggu
+      setDayIndex(dayNumber - 1);
 
       try {
         const { data: materialsData, error: materialsError } = await supabase
