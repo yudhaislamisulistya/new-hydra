@@ -511,7 +511,7 @@ export default function EducationPage() {
           .select("id, title, content, media_url, survey_id")
           .eq("is_published", true)
           .in("target_audience", ["student", "all"])
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: true });
 
         if (materialsError) throw materialsError;
 
