@@ -40,9 +40,16 @@ type TodayHydrationLog = {
   amount_ml: number;
 };
 
+const STUDENTS_PER_PAGE = 10;
+
 export default function AdminActivityPage() {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(students.length / STUDENTS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedStudents = students.slice((safePage - 1) * STUDENTS_PER_PAGE, safePage * STUDENTS_PER_PAGE);
 
   useEffect(() => {
     async function fetchData() {
@@ -222,7 +229,7 @@ export default function AdminActivityPage() {
                       </td>
                     </tr>
                   ) : (
-                    students.map((student) => {
+                    paginatedStudents.map((student) => {
                       const percentage =
                         student.need_medium > 0
                           ? Math.min(100, Math.round((student.today_hydration / student.need_medium) * 100))
@@ -280,6 +287,35 @@ export default function AdminActivityPage() {
                 </tbody>
               </table>
             </div>
+
+            {!loading && students.length > 0 && (
+              <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row gap-3 justify-between items-center text-sm text-slate-500">
+                <span>
+                  Menampilkan {(safePage - 1) * STUDENTS_PER_PAGE + 1}–{Math.min(safePage * STUDENTS_PER_PAGE, students.length)} dari {students.length} siswa
+                </span>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                    >
+                      Sebelumnya
+                    </button>
+                    <span className="font-semibold text-slate-700">Halaman {safePage} / {totalPages}</span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={safePage >= totalPages}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                    >
+                      Berikutnya
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

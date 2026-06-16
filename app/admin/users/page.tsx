@@ -78,6 +78,8 @@ type EditFormData = {
   income_amount: string;
 };
 
+const USERS_PER_PAGE = 10;
+
 const roleLabels: Record<UserRole, string> = {
   student: "Siswa",
   parent: "Orang Tua",
@@ -101,6 +103,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRole, setFilterRole] = useState<"all" | UserRole>("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [refreshToken, setRefreshToken] = useState(0);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editFormData, setEditFormData] = useState<EditFormData>({
@@ -261,7 +264,12 @@ export default function AdminUsersPage() {
   const handleFilterChange = (nextRole: "all" | UserRole) => {
     setLoading(true);
     setFilterRole(nextRole);
+    setCurrentPage(1);
   };
+
+  const totalPages = Math.max(1, Math.ceil(users.length / USERS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedUsers = users.slice((safePage - 1) * USERS_PER_PAGE, safePage * USERS_PER_PAGE);
 
   const handleOpenEdit = (user: AdminUser) => {
     const weight = user.student_profiles?.weight_kg;
@@ -479,7 +487,7 @@ export default function AdminUsersPage() {
                       </td>
                     </tr>
                   ) : (
-                    users.map((user) => (
+                    paginatedUsers.map((user) => (
                       <tr key={user.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">
                           {user.full_name || "-"}
@@ -546,8 +554,33 @@ export default function AdminUsersPage() {
               </table>
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-between items-center text-sm text-slate-500">
-              <span>Menampilkan {users.length} pengguna</span>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-xl flex flex-col sm:flex-row gap-3 justify-between items-center text-sm text-slate-500">
+              <span>
+                {users.length === 0
+                  ? "Tidak ada pengguna"
+                  : `Menampilkan ${(safePage - 1) * USERS_PER_PAGE + 1}–${Math.min(safePage * USERS_PER_PAGE, users.length)} dari ${users.length} pengguna`}
+              </span>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage <= 1}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                  >
+                    Sebelumnya
+                  </button>
+                  <span className="font-semibold text-slate-700">Halaman {safePage} / {totalPages}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage >= totalPages}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                  >
+                    Berikutnya
+                  </button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

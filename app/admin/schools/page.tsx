@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, Droplets, Edit3, GraduationCap, Loader2, MapPin, Phone, Plus, School2, Target, Trash2, UserRound, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Droplets, Edit3, GraduationCap, Loader2, MapPin, Phone, Plus, School2, Search, Target, Trash2, UserRound, X } from "lucide-react";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
@@ -107,6 +107,7 @@ export default function AdminSchoolsPage() {
   const [schoolStudents, setSchoolStudents] = useState<SchoolStudentDetail[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentsError, setStudentsError] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
 
   const fetchSchools = useCallback(async () => {
     setLoading(true);
@@ -275,6 +276,7 @@ export default function AdminSchoolsPage() {
     setSelectedSchool(null);
     setSchoolStudents([]);
     setStudentsError("");
+    setStudentSearch("");
   };
 
   const handleOpenStudents = async (school: SchoolRecord) => {
@@ -282,6 +284,7 @@ export default function AdminSchoolsPage() {
     setIsStudentsOpen(true);
     setLoadingStudents(true);
     setStudentsError("");
+    setStudentSearch("");
 
     const supabase = createClient();
 
@@ -521,6 +524,14 @@ export default function AdminSchoolsPage() {
     const adequateCount = schoolStudents.filter((student) => student.adequacy_label === "Adekuat").length;
     const notAdequateCount = schoolStudents.length - adequateCount;
 
+    const query = studentSearch.trim().toLowerCase();
+    const filteredStudents = query
+      ? schoolStudents.filter((student) =>
+          [student.full_name, student.student_code, student.username, student.email]
+            .some((field) => (field || "").toLowerCase().includes(query))
+        )
+      : schoolStudents;
+
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
         <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
@@ -567,6 +578,19 @@ export default function AdminSchoolsPage() {
               </Card>
             </div>
 
+            {!loadingStudents && !studentsError && schoolStudents.length > 0 && (
+              <div className="mt-5 relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={studentSearch}
+                  onChange={(event) => setStudentSearch(event.target.value)}
+                  placeholder="Cari siswa berdasarkan nama, kode, atau email..."
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            )}
+
             {loadingStudents ? (
               <div className="py-16 text-center text-slate-400">Memuat detail siswa...</div>
             ) : studentsError ? (
@@ -584,9 +608,17 @@ export default function AdminSchoolsPage() {
                   <p className="mt-1 text-sm text-slate-500">Hubungkan siswa ke sekolah ini agar admin bisa melihat progres hidrasi harian mereka.</p>
                 </CardContent>
               </Card>
+            ) : filteredStudents.length === 0 ? (
+              <Card className="mt-5 border-0 shadow-sm">
+                <CardContent className="py-16 text-center">
+                  <Search size={42} className="mx-auto mb-3 text-slate-300" />
+                  <h4 className="text-lg font-bold text-slate-700">Tidak ada siswa yang cocok</h4>
+                  <p className="mt-1 text-sm text-slate-500">Coba kata kunci lain untuk pencarian &ldquo;{studentSearch}&rdquo;.</p>
+                </CardContent>
+              </Card>
             ) : (
               <div className="mt-5 grid gap-4">
-                {schoolStudents.map((student) => {
+                {filteredStudents.map((student) => {
                   const progress = student.daily_water_target_ml
                     ? Math.min(100, Math.round((student.total_today_ml / student.daily_water_target_ml) * 100))
                     : 0;

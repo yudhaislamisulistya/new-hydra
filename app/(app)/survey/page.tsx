@@ -5,7 +5,8 @@ import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { ProgressBar } from "../../../components/ui/ProgressBar";
-import { CheckCircle2, ClipboardList } from "lucide-react";
+import { CheckCircle2, ClipboardList, ArrowLeft, Trophy } from "lucide-react";
+import Link from "next/link";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/supabase/client";
 
@@ -434,12 +435,13 @@ export default function SurveyPage() {
   // ── LIST SCREEN ──
   return (
     <>
-      <Header title="Kuis" />
+      <Header title="Ayo Jawab" />
       <div className="p-6 space-y-6 pb-24">
         <div className="mb-2">
-          <h2 className="font-extrabold text-slate-800 text-xl">Kuis Harian</h2>
+          <h2 className="font-extrabold text-slate-800 text-xl">Pengetahuan dan Sikap Kamu</h2>
+          <p className="text-blue-600 text-sm font-bold mt-1">Ayo Jawab</p>
           <p className="text-slate-500 text-sm mt-1">
-            Yang ditampilkan di sini hanya Kuis Sikap Dehidrasi dan Kuis Pengetahuan Dehidrasi.
+            Yuk, jawab pertanyaan berikut untuk mengetahui pemahaman dan kesadaran kamu tentang pentingnya menjaga keseimbangan cairan tubuh.
           </p>
         </div>
 
@@ -498,6 +500,24 @@ export default function SurveyPage() {
             );
           })
         )}
+
+        {/* Navigasi */}
+        <div className="flex gap-3 pt-2">
+          <Link
+            href="/tracker"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <ArrowLeft size={18} />
+            Kembali
+          </Link>
+          <Link
+            href="/leaderboard"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+          >
+            <Trophy size={18} />
+            Ayo Lanjutkan
+          </Link>
+        </div>
       </div>
     </>
   );

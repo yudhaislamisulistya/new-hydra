@@ -6,7 +6,8 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/supabase/client";
 import { XP_PER_SURVEY, XP_PER_HYDRATION_LOG } from "../../../utils/gamification";
-import { Trophy, Zap, Droplet, ClipboardList, Medal, Crown } from "lucide-react";
+import { Trophy, Zap, Droplet, ClipboardList, Medal, Crown, ArrowLeft, Home } from "lucide-react";
+import Link from "next/link";
 
 // XP Rules:
 // - Each survey/quiz completed = 100 XP
@@ -51,6 +52,7 @@ export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [myRank, setMyRank] = useState<LeaderboardEntry | null>(null);
+  const [visibleCount, setVisibleCount] = useState(10);
 
   useEffect(() => {
     async function fetchLeaderboard() {
@@ -153,7 +155,7 @@ export default function LeaderboardPage() {
 
   return (
     <>
-      <Header title="Leaderboard" />
+      <Header title="Papan Peringkat" />
       <div className="p-6 space-y-6 pb-28">
 
         {/* Hero Card */}
@@ -228,7 +230,7 @@ export default function LeaderboardPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {leaderboard.map((entry) => {
+            {leaderboard.slice(0, visibleCount).map((entry) => {
               const isMe = entry.id === profile?.id;
               return (
                 <div
@@ -281,8 +283,36 @@ export default function LeaderboardPage() {
                 </div>
               );
             })}
+
+            {visibleCount < leaderboard.length && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount((c) => c + 10)}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-indigo-600 transition-colors hover:bg-slate-50"
+              >
+                Lihat Lainnya ({leaderboard.length - visibleCount} lagi)
+              </button>
+            )}
           </div>
         )}
+
+        {/* Navigasi */}
+        <div className="flex gap-3 pt-2">
+          <Link
+            href="/survey"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <ArrowLeft size={18} />
+            Kembali
+          </Link>
+          <Link
+            href="/dashboard"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-indigo-700"
+          >
+            <Home size={18} />
+            Selesai
+          </Link>
+        </div>
 
       </div>
     </>

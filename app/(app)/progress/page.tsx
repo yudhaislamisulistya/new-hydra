@@ -222,7 +222,7 @@ export default function ProgressPage() {
   if (profile?.role !== 'parent') {
     return (
       <>
-        <Header title="Progress" />
+        <Header title="Rincian Perkembangan Anak" />
         <div className="p-6 text-center text-slate-500">Halaman ini khusus untuk Orang Tua.</div>
       </>
     );
@@ -230,8 +230,8 @@ export default function ProgressPage() {
 
   return (
     <>
-      <Header title="Progress Detail" />
-      <div className="p-6 space-y-6 pb-28 bg-slate-50 min-h-screen">
+      <Header title="Rincian Perkembangan Anak" />
+      <div className="p-6 space-y-6 pb-28">
         
         {/* Top Selection Area */}
         <div className="space-y-4">
@@ -337,7 +337,7 @@ export default function ProgressPage() {
               <div className="bg-white px-5 py-4 border-b border-slate-50 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <BarChartIcon size={18} className="text-slate-400" />
-                  <h3 className="font-bold text-slate-800 text-sm">Tren Hidrasi</h3>
+                  <h3 className="font-bold text-slate-800 text-sm">Tren Keseimbangan Cairan</h3>
                 </div>
                 <div className="flex items-center gap-1.5 bg-green-50 px-2 py-1 rounded-lg">
                   <Award size={14} className="text-green-600" />

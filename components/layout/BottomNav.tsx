@@ -10,22 +10,22 @@ export function BottomNav() {
   const pathname = usePathname();
   const { profile } = useUserStore();
 
-  const navItems = profile?.role === "parent" 
+  const navItems = profile?.role === "parent"
     ? [
-        { name: "Anak", href: "/dashboard", icon: Users },
-        { name: "Progress", href: "/progress", icon: BarChart3 },
+        { name: "Pantauan", href: "/dashboard", icon: Users },
+        { name: "Perkembangan", href: "/progress", icon: BarChart3 },
         { name: "Profil", href: "/profile", icon: User },
       ]
     : [
-        { name: "Home", href: "/dashboard", icon: Home },
-        { name: "Edukasi", href: "/education", icon: BookOpen },
-        { name: "Tracker", href: "/tracker", icon: Droplet },
-        { name: "Kuis", href: "/survey", icon: ClipboardList },
-        { name: "Ranking", href: "/leaderboard", icon: Trophy },
+        { name: "Halaman Utama", href: "/dashboard", icon: Home },
+        { name: "Ayo Belajar", href: "/education", icon: BookOpen },
+        { name: "Ayo Catat", href: "/tracker", icon: Droplet },
+        { name: "Ayo Jawab", href: "/survey", icon: ClipboardList },
+        { name: "Papan Peringkat", href: "/leaderboard", icon: Trophy },
       ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-20 bg-white border-t border-slate-200 px-4 pb-safe pt-2 flex justify-around items-center z-50">
+    <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md min-h-20 bg-white border-t border-slate-200 px-4 pb-safe pt-2 flex justify-around items-center z-50">
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -34,7 +34,7 @@ export function BottomNav() {
             key={item.name}
             href={item.href}
             className={cn(
-              "flex flex-col items-center justify-center w-14 gap-1 transition-colors",
+              "flex flex-col items-center justify-center w-16 gap-1 transition-colors",
               isActive ? "text-blue-500" : "text-slate-400 hover:text-slate-600"
             )}
           >
@@ -42,9 +42,9 @@ export function BottomNav() {
               "p-1.5 rounded-full transition-all",
               isActive && "bg-blue-50"
             )}>
-              <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+              <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
             </div>
-            <span className="text-[10px] font-medium">{item.name}</span>
+            <span className="text-[10px] font-medium text-center leading-tight">{item.name}</span>
           </Link>
         );
       })}

@@ -6,31 +6,53 @@ import { useHydrationStore } from "../../../store/useHydrationStore";
 import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { ProgressBar } from "../../../components/ui/ProgressBar";
-import { AlertCircle, Target, Activity, ClipboardList, CheckCircle2, Copy, UserPlus, Trash2, Droplet, ChevronRight, Sparkles, ChevronDown, ChevronUp, Clock3, Bell, GraduationCap, School2, Phone, IdCard, BriefcaseBusiness, Wallet, CalendarDays, MessageSquareText, SendHorizonal, Users, Zap } from "lucide-react";
+import { AlertCircle, ClipboardList, CheckCircle2, Copy, UserPlus, Trash2, Droplet, ChevronRight, Sparkles, ChevronDown, ChevronUp, Bell, GraduationCap, School2, Phone, IdCard, BriefcaseBusiness, Wallet, CalendarDays, MessageSquareText, SendHorizonal, Users, Zap, PlayCircle } from "lucide-react";
 import Link from "next/link";
 import { calculateRequiredIntake, formatLocalDateKey, type ActivityLevel, type Gender } from "../../../utils/hydrationCalc";
 import { createClient } from "../../../utils/supabase/client";
 import { getBuddyAccessory, getBuddyColor } from "../../../utils/hydrationBuddy";
-import { buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
+import { getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, getParentGenderLabel } from "../../../utils/parentProfile";
 import { buildCheckinStats, getCheckinReward, MAX_STREAK_BONUS_DAYS } from "../../../utils/gamification";
 
-type SurveySummary = {
-  id: string;
-  title: string;
-  description: string | null;
-  survey_type: string | null;
+// Video panduan sederhana penggunaan aplikasi. Isi URL YouTube di sini agar video tampil.
+const USAGE_VIDEO_URL = "";
+
+const getUsageVideoId = (url: string) => {
+  const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+  return match && match[2].length === 11 ? match[2] : null;
 };
 
-type SurveyResponseRow = {
-  survey_id: string;
-};
-
-const REQUIRED_DAILY_QUIZ_TYPES = new Set(["sikap", "pengetahuan"]);
-
-function isRequiredDailyQuiz(survey: SurveySummary) {
-  const normalizedTitle = survey.title.toLowerCase();
-  return REQUIRED_DAILY_QUIZ_TYPES.has(survey.survey_type || "") && normalizedTitle.includes("dehidrasi");
+function UsageVideoCard() {
+  const videoId = USAGE_VIDEO_URL ? getUsageVideoId(USAGE_VIDEO_URL) : null;
+  return (
+    <Card className="border-2 border-slate-100 shadow-sm">
+      <CardContent className="p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <PlayCircle size={18} className="text-blue-500" />
+          <h3 className="font-bold text-slate-800 text-sm">Video Panduan Penggunaan Aplikasi</h3>
+        </div>
+        {videoId ? (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
+            <div className="aspect-video w-full">
+              <iframe
+                className="h-full w-full"
+                src={`https://www.youtube.com/embed/${videoId}?rel=0`}
+                title="Panduan penggunaan aplikasi"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+            <PlayCircle size={32} className="text-slate-300" />
+            <p className="text-xs font-semibold text-slate-500">Video panduan penggunaan aplikasi segera hadir.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 type ChildLink = {
@@ -166,7 +188,8 @@ export default function DashboardPage() {
   const { profile } = useUserStore();
   const today = formatLocalDateKey(new Date());
   const { records, fetchLogs } = useHydrationStore();
-  const [activityLevel, setActivityLevel] = useState<ActivityLevel>("sedang");
+  // Aktivitas (FA) sekarang diisi di menu "Ayo Catat". Dashboard memakai default sedang untuk ringkasan.
+  const activityLevel: ActivityLevel = "sedang";
 
   // Calculate the correct daily target using FBB × FG + FA
   const dailyTarget = profile?.role === "student"
@@ -177,16 +200,6 @@ export default function DashboardPage() {
       })
     : 1500;
 
-  // Breakdown values for display
-  const fbb = (() => {
-    const w = profile?.weight_kg || 25;
-    if (w <= 10) return 100 * w;
-    if (w <= 20) return 1000 + 50 * (w - 10);
-    return 1500 + 20 * (w - 20);
-  })();
-  const fg = profile?.gender === "female" ? 1.0 : 1.05;
-  const fa = activityLevel === "rendah" ? 0 : activityLevel === "sedang" ? 375 : 750;
-
   useEffect(() => {
     if (profile?.id && profile?.role === "student") {
       fetchLogs(profile.id, dailyTarget);
@@ -195,9 +208,6 @@ export default function DashboardPage() {
 
   const todayRecord = records[today];
   const totalIntake = todayRecord?.total_intake_ml || 0;
-  const fluidPercentage = dailyTarget > 0
-    ? Math.min((totalIntake / dailyTarget) * 100, 100)
-    : 0;
   const adequacyStatus = getAdequacyStatus(totalIntake, dailyTarget);
   const savedBuddyColor = profile?.id && profile.role === "student" && typeof window !== "undefined"
     ? localStorage.getItem(`avatar_color_${profile.id}`)
@@ -209,13 +219,6 @@ export default function DashboardPage() {
   const buddyAccessoryConfig = getBuddyAccessory(savedBuddyAccessory || "none");
   const BuddyAccessoryIcon = buddyAccessoryConfig.icon;
 
-  // Fetch surveys for the education mission section
-  const [surveys, setSurveys] = useState<SurveySummary[]>([]);
-  const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [hydrationHistory, setHydrationHistory] = useState<HydrationHistoryItem[]>([]);
-  const hydrationPeriodSummaries = useMemo(() => buildHydrationPeriodSummaries(hydrationHistory), [hydrationHistory]);
   const [showDailyGuideModal, setShowDailyGuideModal] = useState(false);
   const [expandedDailyGuideStep, setExpandedDailyGuideStep] = useState<number | null>(0);
   const [studentCheckins, setStudentCheckins] = useState<DailyCheckinRow[]>([]);
@@ -224,71 +227,6 @@ export default function DashboardPage() {
   const [checkinError, setCheckinError] = useState("");
   const checkinStats = useMemo(() => buildCheckinStats(studentCheckins), [studentCheckins]);
 
-  useEffect(() => {
-    async function fetchSurveys() {
-      if (!profile?.id) return;
-      const supabase = createClient();
-      
-      const { data: surveysData } = await supabase
-        .from('surveys')
-        .select('id, title, description, survey_type')
-        .eq('is_active', true)
-        .eq('target_role', 'student')
-        .order('created_at', { ascending: false })
-        .limit(10);
-      
-      const quizItems = ((surveysData as SurveySummary[] | null) || [])
-        .filter(isRequiredDailyQuiz)
-        .sort((a, b) => {
-          const priority = { pengetahuan: 0, sikap: 1 };
-          return (priority[a.survey_type as keyof typeof priority] ?? 99) - (priority[b.survey_type as keyof typeof priority] ?? 99);
-        })
-        .slice(0, 2);
-
-      setSurveys(quizItems);
-
-      // Check today's completions
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const { data: responses } = await supabase
-        .from('survey_responses')
-        .select('survey_id')
-        .eq('respondent_id', profile.id)
-        .gte('submitted_at', todayStart.toISOString());
-
-      setCompletedSurveyIds(new Set((responses as SurveyResponseRow[] | null || []).map((r) => r.survey_id)));
-    }
-    fetchSurveys();
-  }, [profile?.id]);
-
-  useEffect(() => {
-    async function fetchHydrationHistory() {
-      if (!isHistoryOpen || !profile?.id || profile.role !== "student") return;
-
-      setHistoryLoading(true);
-      const supabase = createClient();
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-
-      const { data, error } = await supabase
-        .from("hydration_logs")
-        .select("id, amount_ml, drink_type, logged_at")
-        .eq("student_id", profile.id)
-        .gte("logged_at", todayStart.toISOString())
-        .order("logged_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching hydration history:", error);
-        setHydrationHistory([]);
-      } else {
-        setHydrationHistory((data as HydrationHistoryItem[]) || []);
-      }
-
-      setHistoryLoading(false);
-    }
-
-    fetchHydrationHistory();
-  }, [isHistoryOpen, profile?.id, profile?.role, totalIntake]);
 
   useEffect(() => {
     async function fetchStudentCheckins() {
@@ -359,8 +297,9 @@ export default function DashboardPage() {
   const [childHydrationMap, setChildHydrationMap] = useState<Record<string, ChildDailyHydrationStatus>>({});
   const [teacherStudents, setTeacherStudents] = useState<TeacherStudentSummary[]>([]);
   const [teacherStudentsLoading, setTeacherStudentsLoading] = useState(false);
+  const [teacherVisibleCount, setTeacherVisibleCount] = useState(5);
   const [teacherHydrationMap, setTeacherHydrationMap] = useState<Record<string, ChildDailyHydrationStatus>>({});
-  const [teacherHydrationLogsMap, setTeacherHydrationLogsMap] = useState<Record<string, HydrationHistoryItem[]>>({});
+  const [, setTeacherHydrationLogsMap] = useState<Record<string, HydrationHistoryItem[]>>({});
   const [sendingTeacherReminderTo, setSendingTeacherReminderTo] = useState<string | null>(null);
 
   useEffect(() => {
@@ -705,7 +644,7 @@ export default function DashboardPage() {
   if (profile?.role === "teacher") {
     return (
       <>
-        <Header title="Dashboard Guru" />
+        <Header title="Pantauan Guru" />
         <div className="p-6 space-y-6">
           <Card className="bg-gradient-to-r from-violet-500 to-indigo-500 text-white">
             <CardContent className="p-6">
@@ -724,42 +663,27 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-5 flex items-start gap-3">
-                <div className="rounded-2xl bg-violet-100 p-3 text-violet-600">
-                  <School2 size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Sekolah</p>
-                  <p className="mt-1 text-base font-bold text-slate-800">{profile.school_name || "Belum diatur"}</p>
-                </div>
-              </CardContent>
-            </Card>
+          <UsageVideoCard />
 
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-5 flex items-start gap-3">
-                <div className="rounded-2xl bg-indigo-100 p-3 text-indigo-600">
-                  <IdCard size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Nomor Induk</p>
-                  <p className="mt-1 text-base font-bold text-slate-800">{profile.employee_number || "Belum diatur"}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 shadow-sm">
-              <CardContent className="p-5 flex items-start gap-3">
-                <div className="rounded-2xl bg-sky-100 p-3 text-sky-600">
-                  <Phone size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Nomor HP</p>
-                  <p className="mt-1 text-base font-bold text-slate-800">{profile.phone || "Belum diatur"}</p>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="rounded-2xl border border-slate-100 bg-white shadow-sm divide-y divide-slate-100">
+            <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <span className="flex shrink-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                <School2 size={16} className="text-violet-500" /> Sekolah
+              </span>
+              <span className="min-w-0 break-words text-right text-sm font-bold text-slate-800">{profile.school_name || "Belum diatur"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <span className="flex shrink-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                <IdCard size={16} className="text-indigo-500" /> Nomor Induk
+              </span>
+              <span className="min-w-0 break-words text-right text-sm font-bold text-slate-800">{profile.employee_number || "Belum diatur"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <span className="flex shrink-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                <Phone size={16} className="text-sky-500" /> Nomor HP
+              </span>
+              <span className="min-w-0 break-words text-right text-sm font-bold text-slate-800">{profile.phone || "Belum diatur"}</span>
+            </div>
           </div>
 
           <Card className="border border-violet-100 bg-violet-50/60">
@@ -776,15 +700,15 @@ export default function DashboardPage() {
 
           <Card className="border-0 shadow-sm">
             <CardContent className="p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <h3 className="text-lg font-bold text-slate-800">Daftar Siswa Sekolah</h3>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 break-words">
                     Halaman guru hanya menampilkan siswa yang terdaftar pada sekolah {profile.school_name || "yang terhubung"}.
                   </p>
                 </div>
-                <div className="rounded-2xl bg-violet-100 px-4 py-3 text-violet-700">
-                  <p className="text-[10px] font-bold uppercase tracking-wider">Total Siswa</p>
+                <div className="rounded-2xl bg-violet-100 px-4 py-3 text-violet-700 text-center shrink-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider">Total</p>
                   <p className="mt-1 text-2xl font-extrabold">{teacherStudents.length}</p>
                 </div>
               </div>
@@ -802,8 +726,8 @@ export default function DashboardPage() {
                   Belum ada siswa yang terdaftar pada sekolah ini.
                 </div>
               ) : (
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {teacherStudents.map((student) => {
+                <div className="mt-4 grid grid-cols-1 gap-3">
+                  {teacherStudents.slice(0, teacherVisibleCount).map((student) => {
                     const studentStatus = teacherHydrationMap[student.id] || {
                       totalIntakeMl: 0,
                       targetMl: student.daily_water_target_ml || 1500,
@@ -812,7 +736,6 @@ export default function DashboardPage() {
                       progressPercent: 0,
                     };
                     const studentName = student.profiles?.full_name || "Siswa";
-                    const studentLogs = teacherHydrationLogsMap[student.id] || [];
 
                     return (
                       <div key={student.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-4">
@@ -824,20 +747,7 @@ export default function DashboardPage() {
                             <p className="truncate text-sm font-bold text-slate-800">
                               {studentName}
                             </p>
-                            <p className="mt-1 text-[11px] font-mono text-slate-400">
-                              Kode: {student.student_code || "-"}
-                            </p>
-                            <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium text-slate-600">
-                              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
-                                {student.class_level ? `Kelas ${student.class_level}` : "Kelas belum diisi"}
-                              </span>
-                              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
-                                {student.child_order ? `Anak ke-${student.child_order}` : "Anak ke belum diisi"}
-                              </span>
-                              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1">
-                                Target: {student.daily_water_target_ml || "-"} ml
-                              </span>
-                            </div>
+                            <p className="mt-1 text-xs text-slate-500">Progress minum hari ini</p>
                           </div>
                         </div>
 
@@ -854,7 +764,7 @@ export default function DashboardPage() {
                                 ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
                                 : "bg-rose-100 text-rose-700 border border-rose-200"
                             }`}>
-                              {studentStatus.isAdequate ? "Adekuat" : `Tidak Adekuat • Kurang ${studentStatus.remainingMl} ml`}
+                              {studentStatus.isAdequate ? "Baik" : `Tidak Baik • Kurang ${studentStatus.remainingMl} ml`}
                             </span>
                           </div>
                           <div className="mt-3">
@@ -862,49 +772,12 @@ export default function DashboardPage() {
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Log Minum Hari Ini</p>
-                              <p className="mt-1 text-xs text-slate-500">
-                                Guru bisa melihat jenis minuman yang sudah dicatat siswa hari ini.
-                              </p>
-                            </div>
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                              {studentLogs.length} log
-                            </span>
-                          </div>
-
-                          {studentLogs.length === 0 ? (
-                            <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-center">
-                              <p className="text-xs font-medium text-slate-500">Belum ada log minum hari ini.</p>
-                            </div>
-                          ) : (
-                            <div className="mt-3 space-y-2">
-                              {studentLogs.map((log) => (
-                                <div key={log.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="mb-1 flex items-center gap-2 text-[11px] text-slate-400">
-                                        <Clock3 size={12} />
-                                        <span>{new Date(log.logged_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
-                                      </div>
-                                      <p className="text-sm font-bold text-slate-800">{log.drink_type || "Air putih"}</p>
-                                      <p className="text-xs text-slate-500">{log.amount_ml} ml</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
                         {!studentStatus.isAdequate && (
                           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
+                            <div className="flex flex-col gap-3">
+                              <div className="min-w-0">
                                 <p className="text-sm font-bold text-amber-800">Pengingat Guru</p>
-                                <p className="mt-1 text-xs text-amber-700">
+                                <p className="mt-1 text-xs text-amber-700 break-words">
                                   Kirim pengingat harian agar {studentName} segera menambah minum air putih hari ini.
                                 </p>
                               </div>
@@ -912,7 +785,7 @@ export default function DashboardPage() {
                                 type="button"
                                 onClick={() => handleSendTeacherReminder(student.id, studentName)}
                                 disabled={sendingTeacherReminderTo === student.id}
-                                className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 transition-colors disabled:opacity-50 shrink-0"
                               >
                                 <Bell size={14} />
                                 {sendingTeacherReminderTo === student.id ? "Mengirim..." : "Kirim Pengingat"}
@@ -924,6 +797,16 @@ export default function DashboardPage() {
                     );
                   })}
                 </div>
+              )}
+
+              {teacherStudents.length > teacherVisibleCount && (
+                <button
+                  type="button"
+                  onClick={() => setTeacherVisibleCount((c) => c + 5)}
+                  className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-violet-700 transition-colors hover:bg-slate-50"
+                >
+                  Lihat Lebih Banyak ({teacherStudents.length - teacherVisibleCount} siswa lagi)
+                </button>
               )}
             </CardContent>
           </Card>
@@ -937,7 +820,7 @@ export default function DashboardPage() {
 
     return (
       <>
-        <Header title="Dashboard Orang Tua" />
+        <Header title="Pantauan Orang Tua" />
         <div className="p-6 space-y-6">
           <Card className="bg-gradient-to-r from-teal-500 to-teal-400 text-white">
             <CardContent className="p-6">
@@ -946,37 +829,39 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <UsageVideoCard />
+
+          <div className="grid grid-cols-1 gap-4">
             <Card className="border-0 shadow-sm">
               <CardContent className="p-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <GraduationCap size={16} />
-                      <p className="text-xs font-bold uppercase tracking-wider">Pendidikan</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-slate-50 p-4 min-w-0">
+                    <div className="flex items-center gap-2 text-slate-500 min-w-0">
+                      <GraduationCap size={16} className="shrink-0" />
+                      <p className="text-[11px] font-bold uppercase tracking-wide leading-tight min-w-0">Pendidikan</p>
                     </div>
-                    <p className="mt-2 text-sm font-bold text-slate-800">{getParentEducationLabel(profile.education_level)}</p>
+                    <p className="mt-2 text-sm font-bold text-slate-800 break-words">{getParentEducationLabel(profile.education_level)}</p>
                   </div>
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <BriefcaseBusiness size={16} />
-                      <p className="text-xs font-bold uppercase tracking-wider">Pekerjaan</p>
+                  <div className="rounded-2xl bg-slate-50 p-4 min-w-0">
+                    <div className="flex items-center gap-2 text-slate-500 min-w-0">
+                      <BriefcaseBusiness size={16} className="shrink-0" />
+                      <p className="text-[11px] font-bold uppercase tracking-wide leading-tight min-w-0">Pekerjaan</p>
                     </div>
-                    <p className="mt-2 text-sm font-bold text-slate-800">{profile.occupation || "Belum diisi"}</p>
+                    <p className="mt-2 text-sm font-bold text-slate-800 break-words">{profile.occupation || "Belum diisi"}</p>
                   </div>
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <CalendarDays size={16} />
-                      <p className="text-xs font-bold uppercase tracking-wider">Umur</p>
+                  <div className="rounded-2xl bg-slate-50 p-4 min-w-0">
+                    <div className="flex items-center gap-2 text-slate-500 min-w-0">
+                      <CalendarDays size={16} className="shrink-0" />
+                      <p className="text-[11px] font-bold uppercase tracking-wide leading-tight min-w-0">Umur</p>
                     </div>
-                    <p className="mt-2 text-sm font-bold text-slate-800">{profile.age ? `${profile.age} tahun` : "Belum diisi"}</p>
+                    <p className="mt-2 text-sm font-bold text-slate-800 break-words">{profile.age ? `${profile.age} tahun` : "Belum diisi"}</p>
                   </div>
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <UserPlus size={16} />
-                      <p className="text-xs font-bold uppercase tracking-wider">Jenis Kelamin</p>
+                  <div className="rounded-2xl bg-slate-50 p-4 min-w-0">
+                    <div className="flex items-center gap-2 text-slate-500 min-w-0">
+                      <UserPlus size={16} className="shrink-0" />
+                      <p className="text-[11px] font-bold uppercase tracking-wide leading-tight min-w-0">Jenis Kelamin</p>
                     </div>
-                    <p className="mt-2 text-sm font-bold text-slate-800">{getParentGenderLabel(profile.gender)}</p>
+                    <p className="mt-2 text-sm font-bold text-slate-800 break-words">{getParentGenderLabel(profile.gender)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1170,15 +1055,15 @@ export default function DashboardPage() {
       <Header title="Halo, Teman!" />
       <div className="p-6 space-y-6">
         {showDailyGuideModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4">
-            <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 flex items-center justify-center bg-slate-950/55 px-4">
+            <div className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
               <div className="bg-gradient-to-r from-indigo-600 via-blue-500 to-cyan-500 px-4 py-4 text-white sm:px-6 sm:py-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/80">Panduan Harian</p>
-                    <h2 className="mt-2 text-xl font-extrabold sm:text-2xl">Alur Wajib Hari Ini</h2>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/80">Selamat Datang</p>
+                    <h2 className="mt-2 text-xl font-extrabold sm:text-2xl">Petunjuk Singkat</h2>
                     <p className="mt-2 text-xs text-white/85 sm:text-sm">
-                      Popup ini hanya muncul saat login pertama di hari ini agar kamu tahu urutan penggunaan aplikasi.
+                      Ada 4 langkah seru yang bisa kamu lakukan setiap hari di aplikasi ini.
                     </p>
                   </div>
                   <button
@@ -1195,29 +1080,24 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                 {[
                   {
-                    title: "1. Video Edukasi",
-                    detail: "Mulai dari menu Edukasi. Di dalam video edukasi sudah ada kuis yang perlu dikerjakan lebih dulu.",
+                    title: "1. Ayo Belajar",
+                    detail: "Ayo tonton 5 video pembelajaran tentang pentingnya keseimbangan cairan bagi tubuh kamu.",
                     accent: "bg-blue-50 border-blue-200 text-blue-700",
                   },
                   {
-                    title: "2. Pengisian Tracker",
-                    detail: "Setelah edukasi selesai, lanjutkan ke Tracker untuk mencatat minuman yang diminum hari ini.",
+                    title: "2. Ayo Catat",
+                    detail: "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lihat hasil dan jangan lupa tonton video pesan penting keseimbangan cairan tubuh kamu.",
                     accent: "bg-cyan-50 border-cyan-200 text-cyan-700",
                   },
                   {
-                    title: "3. Status Hidrasi",
-                    detail: "Dari hasil tracker, sistem akan memberi status Adekuat atau Tidak Adekuat secara otomatis.",
+                    title: "3. Ayo Jawab",
+                    detail: "Ayo isi pengetahuan dan sikap tentang keseimbangan cairan tubuh.",
                     accent: "bg-emerald-50 border-emerald-200 text-emerald-700",
                   },
                   {
-                    title: "4. Video Penegasan",
-                    detail: "Setelah status muncul, kamu akan diarahkan ke video penegasan yang sesuai dengan kondisi Adekuat atau Tidak Adekuat.",
+                    title: "4. Papan Peringkat",
+                    detail: "Ayo lihat peringkat keseimbangan cairan kamu hari ini.",
                     accent: "bg-amber-50 border-amber-200 text-amber-700",
-                  },
-                  {
-                    title: "5. Kuis Wajib Harian",
-                    detail: "Terakhir, isi Kuis Sikap Dehidrasi dan Kuis Pengetahuan Dehidrasi pada menu Kuis di hari yang sama.",
-                    accent: "bg-violet-50 border-violet-200 text-violet-700",
                   },
                 ].map((item, index) => (
                   <div key={item.title} className={`overflow-hidden rounded-2xl border ${item.accent}`}>
@@ -1243,31 +1123,20 @@ export default function DashboardPage() {
                 ))}
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                  Rekomendasi urutan harian: <span className="font-bold text-slate-800">Edukasi, lalu Tracker, lalu Status, lalu Video Penegasan, lalu Kuis Sikap Dehidrasi, dan terakhir Kuis Pengetahuan Dehidrasi.</span>
+                  Urutan harian: <span className="font-bold text-slate-800">Ayo Belajar, lalu Ayo Catat, lalu Ayo Jawab, dan terakhir Papan Peringkat.</span>
                 </div>
                 </div>
               </div>
 
               <div className="border-t border-slate-100 bg-white p-4 sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-                    <Link href="/education" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700">
-                      <ClipboardList size={16} />
-                      Buka Edukasi
-                    </Link>
-                    <Link href="/survey" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-100 px-4 py-3 text-sm font-bold text-violet-700 transition-colors hover:bg-violet-200">
-                      <CheckCircle2 size={16} />
-                      Lihat Kuis
-                    </Link>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCloseDailyGuideModal}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
-                  >
-                    Saya Mengerti
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseDailyGuideModal}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+                >
+                  <CheckCircle2 size={16} />
+                  Mengerti
+                </button>
               </div>
             </div>
           </div>
@@ -1310,7 +1179,7 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <div>
-                  <p className="font-bold text-base">Hydration Buddy</p>
+                  <p className="font-bold text-base">Teman Minumku</p>
                   <p className="text-white/75 text-xs mt-0.5">
                     Aksesoris: {buddyAccessoryConfig.name}
                   </p>
@@ -1321,43 +1190,96 @@ export default function DashboardPage() {
           </Card>
         </Link>
 
+        {/* Petunjuk Singkat Aplikasi (dipindah sebelum Aktivitas Harian) */}
+        <Card className="border-2 border-slate-100 shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <ClipboardList size={18} className="text-indigo-500" />
+              <h3 className="font-bold text-slate-800 text-sm">Petunjuk Singkat Aplikasi</h3>
+            </div>
+
+            {/* Video sederhana penggunaan aplikasi */}
+            {USAGE_VIDEO_URL && getUsageVideoId(USAGE_VIDEO_URL) ? (
+              <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
+                <div className="aspect-video w-full">
+                  <iframe
+                    className="h-full w-full"
+                    src={`https://www.youtube.com/embed/${getUsageVideoId(USAGE_VIDEO_URL)}?rel=0`}
+                    title="Panduan penggunaan aplikasi"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="mb-4 flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
+                <PlayCircle size={32} className="text-slate-300" />
+                <p className="text-xs font-semibold text-slate-500">Video panduan penggunaan aplikasi segera hadir.</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {[
+                { title: "Ayo Belajar", detail: "Ayo tonton 5 video pembelajaran tentang pentingnya keseimbangan cairan bagi tubuh kamu." },
+                { title: "Ayo Catat", detail: "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lihat hasil keseimbangan cairan tubuh kamu serta jangan lupa tonton video pesan penting keseimbangan cairan tubuh kamu." },
+                { title: "Ayo Jawab", detail: "Ayo isi pengetahuan dan sikap tentang keseimbangan cairan tubuh." },
+                { title: "Papan Peringkat", detail: "Ayo lihat peringkat keseimbangan cairan kamu hari ini." },
+              ].map((step, index) => (
+                <div key={step.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Langkah {index + 1}</p>
+                  <p className="mt-0.5 text-sm font-bold text-slate-800">{step.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{step.detail}</p>
+                </div>
+              ))}
+            </div>
+
+            <Link
+              href="/education"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+            >
+              <PlayCircle size={18} />
+              Ayo Mulai
+            </Link>
+          </CardContent>
+        </Card>
+
         <Card className="border-2 border-amber-100 shadow-sm overflow-hidden">
           <CardContent className="p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
                   <Zap size={18} className="text-amber-500" />
-                  <h3 className="font-bold text-slate-800 text-sm">Daily Check-In Harian</h3>
+                  <h3 className="font-bold text-slate-800 text-sm">Aktivitas Harian</h3>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  Check-in tiap hari untuk mengumpulkan XP. Semakin panjang streak, semakin besar XP yang didapat.
+                  Catat tiap hari untuk mengumpulkan XP. Semakin panjang prestasimu, semakin besar XP yang didapat.
                 </p>
               </div>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-700">
-                Streak {checkinStats.currentStreak} hari
+                Prestasiku {checkinStats.currentStreak} hari
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-2xl bg-amber-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Reward Hari Ini</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Bintang Hari Ini</p>
                 <p className="mt-1 text-lg font-extrabold text-amber-700">
                   {checkinStats.checkedInToday ? `${checkinStats.todayReward?.totalXp || 0} XP` : `${checkinStats.nextReward.totalXp} XP`}
                 </p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Check-In</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Catatan Harian</p>
                 <p className="mt-1 text-lg font-extrabold text-slate-800">{checkinStats.totalCheckins}</p>
               </div>
               <div className="rounded-2xl bg-violet-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500">XP Check-In</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500">XP Catatan Harian</p>
                 <p className="mt-1 text-lg font-extrabold text-violet-700">{checkinStats.totalCheckinXp}</p>
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Progress 7 Hari</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Catatan 7 Hari</p>
                 <p className="text-[11px] font-semibold text-slate-500">
                   Hari ke-{Math.min(checkinStats.nextStreak, MAX_STREAK_BONUS_DAYS)} berikutnya memberi {checkinStats.nextReward.totalXp} XP
                 </p>
@@ -1392,8 +1314,8 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-slate-500">
                 {checkinStats.checkedInToday
-                  ? `Check-in hari ini sudah diklaim. Besok lanjutkan streak untuk menjaga bonus XP tetap naik.`
-                  : `Check-in sekarang untuk mendapatkan ${checkinStats.nextReward.totalXp} XP dengan streak ${checkinStats.nextStreak} hari.`}
+                  ? `Catatan hari ini sudah diklaim. Besok lanjutkan prestasimu untuk menjaga bonus XP tetap naik.`
+                  : `Catat sekarang untuk mendapatkan ${checkinStats.nextReward.totalXp} XP dengan prestasi ${checkinStats.nextStreak} hari.`}
               </div>
               <button
                 type="button"
@@ -1411,8 +1333,8 @@ export default function DashboardPage() {
                   : checkinSaving
                     ? "Menyimpan..."
                     : checkinStats.checkedInToday
-                      ? "Sudah Check-In Hari Ini"
-                      : "Check-In Sekarang"}
+                      ? "Sudah Catat Hari Ini"
+                      : "Catat Sekarang"}
               </button>
             </div>
 
@@ -1421,30 +1343,6 @@ export default function DashboardPage() {
                 {checkinError}
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-2 border-slate-100 shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <ClipboardList size={18} className="text-indigo-500" />
-              <h3 className="font-bold text-slate-800 text-sm">Alur Pengisian Harian</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {[
-                "Video Edukasi + Kuis",
-                "Pengisian Tracker",
-                "Status Adekuat / Tidak Adekuat",
-                "Video Penegasan",
-                "Kuis Sikap Dehidrasi",
-                "Kuis Pengetahuan Dehidrasi",
-              ].map((step, index) => (
-                <div key={step} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Langkah {index + 1}</p>
-                  <p className="mt-1 text-sm font-bold text-slate-700">{step}</p>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
 
@@ -1461,190 +1359,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Activity Level Selector */}
-        <Card className="border-2 border-blue-100">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Activity size={18} className="text-blue-500" />
-              <h3 className="font-bold text-slate-800 text-sm">Aktivitas Hari Ini (FA)</h3>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { value: "rendah", label: "Rendah", desc: "Duduk, Nonton", fa: 0 },
-                { value: "sedang", label: "Sedang", desc: "Main, Sepeda", fa: 375 },
-                { value: "tinggi", label: "Tinggi", desc: "Olahraga", fa: 750 },
-              ] as const).map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setActivityLevel(opt.value)}
-                  className={`p-3 rounded-xl text-center transition-all ${
-                    activityLevel === opt.value
-                      ? "bg-blue-500 text-white shadow-md ring-2 ring-blue-300"
-                      : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200"
-                  }`}
-                >
-                  <p className="text-sm font-bold">{opt.label}</p>
-                  <p className={`text-[10px] mt-0.5 ${activityLevel === opt.value ? 'text-blue-100' : 'text-slate-400'}`}>{opt.desc}</p>
-                  <p className={`text-[10px] font-bold mt-1 ${activityLevel === opt.value ? 'text-blue-200' : 'text-slate-400'}`}>+{opt.fa} ml</p>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Main Target Card */}
-        <button
-          type="button"
-          onClick={() => setIsHistoryOpen((prev) => !prev)}
-          aria-expanded={isHistoryOpen}
-          className="block w-full text-left rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2"
-        >
-          <Card className="bg-blue-500 text-white overflow-hidden relative cursor-pointer transition-transform active:scale-[0.99]">
-            <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full translate-x-1/2 -translate-y-1/2" />
-            <CardContent className="p-6 relative z-10">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <Target size={20} className="text-blue-200" />
-                  <h2 className="font-bold">Target Minum Harian</h2>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-bold text-blue-100">
-                  <span>{isHistoryOpen ? "Tutup riwayat" : "Lihat riwayat"}</span>
-                  {isHistoryOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </div>
-              </div>
-              
-              <div className="mb-2 flex justify-between items-end">
-                <div>
-                  <span className="text-3xl font-extrabold">{totalIntake}</span>
-                  <span className="text-blue-200 ml-1">/ {dailyTarget} ml</span>
-                </div>
-                <div className="text-right">
-                  <span className="block font-bold">{Math.round(fluidPercentage)}%</span>
-                  <span className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${adequacyStatus.className}`}>
-                    {adequacyStatus.label}
-                  </span>
-                </div>
-              </div>
-              
-              <ProgressBar progress={fluidPercentage} colorClass="bg-white" heightClass="h-4" />
-
-              {/* Formula Breakdown */}
-              <div className="mt-4 bg-white/10 rounded-xl p-3 text-xs">
-                <p className="text-blue-100 font-bold mb-1">Perhitungan: FBB × FG + FA</p>
-                <div className="flex justify-between text-blue-100">
-                  <span>FBB (BB: {profile?.weight_kg || 25}kg)</span>
-                  <span className="font-bold text-white">{Math.round(fbb)} ml</span>
-                </div>
-                <div className="flex justify-between text-blue-100">
-                  <span>FG ({profile?.gender === "female" ? "Perempuan" : "Laki-laki"})</span>
-                  <span className="font-bold text-white">× {fg}</span>
-                </div>
-                <div className="flex justify-between text-blue-100">
-                  <span>FA ({activityLevel})</span>
-                  <span className="font-bold text-white">+ {fa} ml</span>
-                </div>
-                <div className="flex justify-between text-white font-bold border-t border-white/20 mt-2 pt-2">
-                  <span>Total Kebutuhan</span>
-                  <span>{dailyTarget} ml</span>
-                </div>
-              </div>
-
-              <p className="mt-3 text-xs font-semibold text-blue-100">
-                Status hari ini: {adequacyStatus.shortLabel}
-              </p>
-            </CardContent>
-          </Card>
-        </button>
-
-        {isHistoryOpen && (
-          <Card className="border-2 border-blue-100 shadow-sm animate-fade-in-up">
-            <CardContent className="p-5 space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-base">Riwayat Minum Hari Ini</h3>
-                  <p className="text-xs text-slate-500 mt-1">Klik tracker untuk menambahkan data baru. Total cairan tetap jadi dasar perhitungan hidrasi.</p>
-                </div>
-                <Link href="/tracker" className="text-xs font-bold text-blue-600 shrink-0">
-                  Buka Tracker
-                </Link>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {hydrationPeriodSummaries.map((summary) => (
-                  <span key={summary.key} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold border ${summary.accentClassName}`}>
-                    {summary.label}: {summary.totalMl} ml
-                  </span>
-                ))}
-              </div>
-
-              {historyLoading ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
-                  Memuat riwayat minum...
-                </div>
-              ) : hydrationHistory.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
-                  <p className="text-sm font-medium text-slate-500">Belum ada riwayat minum hari ini.</p>
-                  <p className="text-xs text-slate-400 mt-1">Coba catat minuman pertama kamu lewat menu tracker.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {hydrationHistory.map((log) => (
-                    <div key={log.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
-                            <Clock3 size={12} />
-                            <span>{new Date(log.logged_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
-                          </div>
-                          <p className="font-bold text-slate-800 text-sm">{log.drink_type || "Air putih"}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">{log.amount_ml} ml</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="pb-24">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-bold text-slate-800 text-lg">Kuis Harian</h3>
-            <Link href="/survey" className="text-xs font-bold text-blue-600">Lihat Semua &rarr;</Link>
-          </div>
-          {surveys.length === 0 ? (
-            <Card>
-              <CardContent className="p-5 text-center text-slate-400 text-sm">
-                Belum ada kuis tersedia saat ini.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {surveys.map(s => {
-                const isDone = completedSurveyIds.has(s.id);
-                return (
-                  <Link href="/survey" key={s.id} className="block">
-                    <Card className={`border transition-all ${isDone ? 'border-green-300 bg-green-50' : 'border-slate-200 hover:border-blue-300'}`}>
-                      <CardContent className="p-4 flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isDone ? 'bg-green-100' : 'bg-blue-100'}`}>
-                          {isDone ? <CheckCircle2 size={20} className="text-green-500" /> : <ClipboardList size={20} className="text-blue-600" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-800 text-sm truncate">{s.title}</p>
-                          {s.description && <p className="text-[11px] text-slate-500 truncate mt-0.5">{s.description}</p>}
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${isDone ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {isDone ? 'Selesai' : 'Mulai'}
-                        </span>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <div className="pb-4" />
 
       </div>
     </>

@@ -38,12 +38,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const showBottomNav = profile?.role !== "admin" && profile?.role !== "teacher";
 
   return (
-    <div className="min-h-full flex flex-col bg-slate-50 pb-20">
-      {/* Content area */}
-      <main className="flex-1 flex flex-col">{children}</main>
-      
-      {/* Bottom Navigation */}
-      {showBottomNav && <BottomNav />}
+    // Gutter: fills the viewport on web/tablet and centers the mobile frame.
+    <div className="min-h-screen w-full bg-slate-200 flex justify-center">
+      {/* Mobile frame: full width on phones, capped to a phone width on larger screens. */}
+      <div
+        className={`relative w-full max-w-md min-h-screen flex flex-col bg-slate-50 shadow-xl shadow-slate-400/30 ${
+          showBottomNav ? "pb-nav" : "pb-safe"
+        }`}
+      >
+        {/* Content area */}
+        <main className="flex-1 flex flex-col">{children}</main>
+
+        {/* Bottom Navigation */}
+        {showBottomNav && <BottomNav />}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* iOS / Capacitor safe-area utilities (home indicator, notch).
+   Requires viewport-fit=cover (set via the viewport export in app/layout.tsx). */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Bottom padding that clears the fixed bottom nav (h-20 = 5rem) plus the safe area. */
+@utility pb-nav {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

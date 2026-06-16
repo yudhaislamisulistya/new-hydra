@@ -10,6 +10,14 @@ export default function SplashScreen() {
   const supabase = createClient();
 
   useEffect(() => {
+    // Warm up the next routes while the splash animation plays.
+    // In dev, `next dev` only compiles a route on-demand when navigated to,
+    // so without this the app appears "stuck" on the splash while /auth or
+    // /dashboard compiles after the timer. Prefetch makes that compilation
+    // happen during the 2.5s window; in production it just prefetches assets.
+    router.prefetch("/auth");
+    router.prefetch("/dashboard");
+
     let hasSession = false;
 
     supabase.auth.getSession().then(({ data: { session } }) => {

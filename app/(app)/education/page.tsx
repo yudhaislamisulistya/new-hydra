@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
-import { ProgressBar } from "../../../components/ui/ProgressBar";
-import { PlayCircle, Award, CheckCircle2, Lock, CalendarDays } from "lucide-react";
+import { PlayCircle, Award, CheckCircle2, ArrowLeft, Droplet } from "lucide-react";
+import Link from "next/link";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/supabase/client";
 
@@ -299,7 +299,6 @@ function EducationCard({
   };
 
   const currentQuestion = questions[currentIndex];
-  const progress = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0;
   const scoreResult = getScoreResult();
   const ytId = getYouTubeId(material.media_url);
 
@@ -639,12 +638,12 @@ export default function EducationPage() {
 
   return (
     <>
-      <Header title="Edukasi Hidrasi" />
+      <Header title="Ayo Belajar" />
       <div className="p-6 space-y-2 pb-24">
         <div className="mb-6">
-          <h2 className="font-extrabold text-slate-800 text-2xl">Ayo Belajar!</h2>
+          <h2 className="font-extrabold text-slate-800 text-2xl">Pembelajaran Keseimbangan Cairan Tubuh</h2>
           <p className="text-slate-500 text-sm mt-1">
-            Halo {profile?.nickname || "Kawan"}! Yuk tambah wawasanmu tentang hidrasi dengan menonton video di bawah ini.
+            Halo {profile?.nickname || "Kawan"}! Yuk tambah wawasanmu tentang keseimbangan cairan tubuh dengan menonton video di bawah ini.
           </p>
         </div>
 
@@ -671,6 +670,24 @@ export default function EducationPage() {
             />
           ))
         )}
+
+        {/* Navigasi */}
+        <div className="flex gap-3 pt-4">
+          <Link
+            href="/dashboard"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <ArrowLeft size={18} />
+            Kembali
+          </Link>
+          <Link
+            href="/tracker"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+          >
+            <Droplet size={18} />
+            Ayo Lanjutkan
+          </Link>
+        </div>
       </div>
     </>
   );

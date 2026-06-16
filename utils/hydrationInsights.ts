@@ -112,8 +112,8 @@ export function getAdequacyStatus(totalIntake: number, targetIntake: number) {
 
   return {
     isAdequate,
-    label: isAdequate ? "Adekuat" : "Tidak Adekuat",
-    shortLabel: isAdequate ? "Target tercapai" : "Belum tercapai",
+    label: isAdequate ? "Baik" : "Tidak Baik",
+    shortLabel: isAdequate ? "Baik" : "Belum Baik",
     className: isAdequate
       ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
       : "bg-rose-100 text-rose-700 border border-rose-200",
