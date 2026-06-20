@@ -15,16 +15,29 @@ import { getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, getParentGenderLabel } from "../../../utils/parentProfile";
 import { buildCheckinStats, getCheckinReward, MAX_STREAK_BONUS_DAYS } from "../../../utils/gamification";
 
-// Video panduan sederhana penggunaan aplikasi. Isi URL YouTube di sini agar video tampil.
-const USAGE_VIDEO_URL = "";
+const USAGE_VIDEO_URLS = {
+  student: "https://youtu.be/hkz8IqdRJNQ",
+  teacher: "https://youtu.be/MbhyiOd3y3s",
+  parent: "https://youtu.be/yDMzqu7f8ik",
+} as const;
+
+type UsageVideoRole = keyof typeof USAGE_VIDEO_URLS;
+
+const USAGE_VIDEO_ROLE_LABELS: Record<UsageVideoRole, string> = {
+  student: "Siswa",
+  teacher: "Guru",
+  parent: "Orang Tua",
+};
 
 const getUsageVideoId = (url: string) => {
   const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
   return match && match[2].length === 11 ? match[2] : null;
 };
 
-function UsageVideoCard() {
-  const videoId = USAGE_VIDEO_URL ? getUsageVideoId(USAGE_VIDEO_URL) : null;
+function UsageVideoCard({ role }: { role: UsageVideoRole }) {
+  const videoId = getUsageVideoId(USAGE_VIDEO_URLS[role]);
+  const roleLabel = USAGE_VIDEO_ROLE_LABELS[role];
+
   return (
     <Card className="border-2 border-slate-100 shadow-sm">
       <CardContent className="p-5">
@@ -38,7 +51,7 @@ function UsageVideoCard() {
               <iframe
                 className="h-full w-full"
                 src={`https://www.youtube.com/embed/${videoId}?rel=0`}
-                title="Panduan penggunaan aplikasi"
+                title={`Panduan penggunaan aplikasi untuk ${roleLabel}`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
@@ -663,7 +676,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <UsageVideoCard />
+          <UsageVideoCard role="teacher" />
 
           <div className="rounded-2xl border border-slate-100 bg-white shadow-sm divide-y divide-slate-100">
             <div className="flex items-center justify-between gap-4 px-5 py-4">
@@ -829,7 +842,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <UsageVideoCard />
+          <UsageVideoCard role="parent" />
 
           <div className="grid grid-cols-1 gap-4">
             <Card className="border-0 shadow-sm">
@@ -1199,13 +1212,13 @@ export default function DashboardPage() {
             </div>
 
             {/* Video sederhana penggunaan aplikasi */}
-            {USAGE_VIDEO_URL && getUsageVideoId(USAGE_VIDEO_URL) ? (
+            {getUsageVideoId(USAGE_VIDEO_URLS.student) ? (
               <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
                 <div className="aspect-video w-full">
                   <iframe
                     className="h-full w-full"
-                    src={`https://www.youtube.com/embed/${getUsageVideoId(USAGE_VIDEO_URL)}?rel=0`}
-                    title="Panduan penggunaan aplikasi"
+                    src={`https://www.youtube.com/embed/${getUsageVideoId(USAGE_VIDEO_URLS.student)}?rel=0`}
+                    title="Panduan penggunaan aplikasi untuk Siswa"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                   />

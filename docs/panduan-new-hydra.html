@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Naskah Narasi Video Panduan — NEW HYDRA</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    font-size: 11pt;
+    line-height: 1.55;
+    margin: 0;
+  }
+  h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
+  p { margin: 0 0 8px; }
+
+  /* ---------- COVER ---------- */
+  .cover {
+    height: 247mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: linear-gradient(160deg, #2563eb 0%, #0891b2 100%);
+    color: #fff;
+    border-radius: 18px;
+    padding: 40px;
+    page-break-after: always;
+  }
+  .cover .drop { font-size: 64px; margin-bottom: 8px; }
+  .cover h1 { font-size: 34pt; font-weight: 800; letter-spacing: -0.5px; }
+  .cover .sub { font-size: 13pt; opacity: .92; margin-top: 14px; max-width: 460px; }
+  .cover .badge {
+    margin-top: 30px; background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.35); border-radius: 999px;
+    padding: 10px 22px; font-size: 11pt; font-weight: 700;
+  }
+  .cover .meta { margin-top: 40px; font-size: 10pt; opacity: .85; }
+
+  /* ---------- SECTIONS ---------- */
+  .section-title {
+    page-break-before: always;
+    border-radius: 14px;
+    padding: 22px 24px;
+    color: #fff;
+    margin-bottom: 18px;
+  }
+  .section-title .kicker { font-size: 10pt; text-transform: uppercase; letter-spacing: 3px; opacity: .85; font-weight: 700; }
+  .section-title h2 { font-size: 22pt; font-weight: 800; margin-top: 6px; }
+  .section-title p { margin: 10px 0 0; font-size: 10.5pt; opacity: .95; }
+  .sec-siswa { background: linear-gradient(135deg, #2563eb, #3b82f6); }
+  .sec-ortu  { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+  .sec-guru  { background: linear-gradient(135deg, #7c3aed, #6366f1); }
+  .sec-intro { background: linear-gradient(135deg, #0f172a, #334155); }
+
+  .intro-block { page-break-before: always; }
+  .intro-block h3 { font-size: 14pt; color: #0f172a; margin: 18px 0 6px; }
+  .lead { font-size: 11.5pt; color: #334155; }
+
+  ul.clean { margin: 6px 0 12px; padding-left: 20px; }
+  ul.clean li { margin-bottom: 5px; }
+
+  .legend {
+    display: flex; gap: 12px; margin: 14px 0 4px; flex-wrap: wrap;
+  }
+  .legend .item { flex: 1 1 45%; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; background: #f8fafc; }
+  .legend .item b { display:block; margin-bottom: 3px; }
+
+  /* ---------- SCENE ---------- */
+  .scene {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 0 0 14px;
+    page-break-inside: avoid;
+  }
+  .scene .head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0;
+  }
+  .scene .num {
+    background: #1e293b; color: #fff; font-weight: 800; font-size: 9.5pt;
+    border-radius: 8px; padding: 3px 9px; white-space: nowrap;
+  }
+  .sc-siswa .num { background: #2563eb; }
+  .sc-ortu .num { background: #0d9488; }
+  .sc-guru .num { background: #7c3aed; }
+  .scene .title { font-weight: 800; font-size: 11.5pt; color: #0f172a; }
+  .scene .dur { margin-left: auto; font-size: 9pt; color: #64748b; font-weight: 600; white-space: nowrap; }
+  .scene .body { padding: 12px 14px; }
+  .row { margin-bottom: 10px; }
+  .row:last-child { margin-bottom: 0; }
+  .label {
+    display: inline-block; font-size: 8.5pt; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1px; padding: 2px 8px; border-radius: 6px; margin-bottom: 5px;
+  }
+  .label.layar { background: #e0f2fe; color: #0369a1; }
+  .label.narasi { background: #fef3c7; color: #b45309; }
+  .row .text { font-size: 10.5pt; }
+  .row.narasi .text { font-style: italic; color: #0f172a; background: #fffdf5; border-left: 3px solid #f59e0b; padding: 8px 12px; border-radius: 0 8px 8px 0; }
+
+  .tip { background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 10px; padding: 12px 14px; font-size: 10pt; margin: 12px 0; }
+  .tip b { color: #0e7490; }
+
+  .toc { page-break-after: always; }
+  .toc h2 { font-size: 18pt; color: #0f172a; margin-bottom: 12px; }
+  .toc ol { font-size: 11pt; line-height: 1.9; padding-left: 22px; }
+  .toc .grp { font-weight: 800; color: #2563eb; margin-top: 10px; }
+
+  .footnote { font-size: 9pt; color: #94a3b8; text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div class="drop">💧</div>
+  <h1>NEW HYDRA</h1>
+  <div class="sub">Naskah Narasi Video Panduan Penggunaan Aplikasi<br/>Deteksi &amp; Pemantauan Keseimbangan Cairan Tubuh untuk Anak Sekolah Dasar</div>
+  <div class="badge">Untuk Role: Siswa &bull; Orang Tua &bull; Guru</div>
+  <div class="meta">Dokumen ini adalah skrip voice-over siap rekam — lengkap dengan petunjuk tampilan layar tiap adegan.</div>
+</div>
+
+<!-- ============ DAFTAR ISI ============ -->
+<div class="toc">
+  <h2>Daftar Isi</h2>
+  <ol>
+    <li>Pengantar &amp; Cara Memakai Naskah Ini</li>
+    <li class="grp">Bagian A — Panduan Role Siswa</li>
+    <li class="grp">Bagian B — Panduan Role Orang Tua</li>
+    <li class="grp">Bagian C — Panduan Role Guru</li>
+    <li>Catatan Produksi &amp; Estimasi Durasi</li>
+  </ol>
+  <p class="footote footnote" style="margin-top:24px;color:#64748b;font-size:10pt;">
+    Setiap adegan ditulis dalam dua bagian: <b>TAMPILAN LAYAR</b> (apa yang direkam / ditampilkan)
+    dan <b>NARASI</b> (kalimat yang dibacakan pengisi suara).
+  </p>
+</div>
+
+<!-- ============ PENGANTAR ============ -->
+<div class="section-title sec-intro">
+  <div class="kicker">Pendahuluan</div>
+  <h2>Pengantar &amp; Cara Memakai Naskah</h2>
+  <p>Apa itu NEW HYDRA dan bagaimana menggunakan dokumen ini untuk produksi video.</p>
+</div>
+
+<div>
+  <p class="lead"><b>NEW HYDRA</b> adalah aplikasi edukasi dan pemantauan keseimbangan cairan tubuh untuk anak Sekolah Dasar. Aplikasi membantu anak belajar pentingnya minum cukup, mencatat minuman harian, mengukur apakah cairan tubuhnya sudah <b>Baik</b> atau <b>Tidak Baik</b>, lalu menguji pengetahuan dan sikapnya lewat kuis. Orang tua dan guru dapat memantau perkembangan anak secara harian.</p>
+
+  <h3>Tiga peran pengguna dalam video ini</h3>
+  <ul class="clean">
+    <li><b>Siswa (Anak)</b> — pengguna utama: belajar, mencatat minum, menjawab kuis, dan melihat peringkat.</li>
+    <li><b>Orang Tua</b> — menghubungkan akun anak dan memantau capaian minum harian anak.</li>
+    <li><b>Guru</b> — memantau seluruh siswa di sekolahnya dan mengirim pengingat.</li>
+  </ul>
+
+  <h3>Cara membaca naskah</h3>
+  <div class="legend">
+    <div class="item"><b>🖥️ TAMPILAN LAYAR</b>Petunjuk untuk tim editor: layar/menu yang ditampilkan dan aksi yang dilakukan (mengetuk tombol, menggeser, dsb).</div>
+    <div class="item"><b>🎙️ NARASI</b>Kalimat lengkap yang dibacakan oleh pengisi suara (voice-over). Boleh disesuaikan gayanya, tapi makna tetap dijaga.</div>
+  </div>
+
+  <div class="tip"><b>Tips produksi:</b> Gunakan rekaman layar (screen recording) langsung dari aplikasi pada mode tampilan ponsel. Tempo bicara santai untuk bagian Siswa (penonton anak-anak), dan lebih tenang/informatif untuk bagian Orang Tua dan Guru. Setiap kali muncul tombol penting, beri jeda 1 detik agar penonton sempat melihat.</div>
+</div>
+
+<!-- ============ BAGIAN A — SISWA ============ -->
+<div class="section-title sec-siswa">
+  <div class="kicker">Bagian A</div>
+  <h2>Panduan Penggunaan — Role Siswa</h2>
+  <p>Alur harian anak: Ayo Belajar → Ayo Catat → Ayo Jawab → Papan Peringkat.</p>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A1</span><span class="title">Pembuka &amp; Layar Awal</span><span class="dur">± 12 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Animasi logo tetesan air dan tulisan <b>NEW HYDRA</b> pada layar pembuka (splash), lalu otomatis berpindah ke halaman masuk.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Halo, teman-teman! Selamat datang di NEW HYDRA — aplikasi seru yang membantu kamu menjaga keseimbangan cairan tubuh setiap hari. Yuk, kita lihat cara memakainya!"</div></div>
+  </div>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A2</span><span class="title">Masuk ke Akun (Login)</span><span class="dur">± 18 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Halaman masuk. Sorot kolom <b>Username</b> dan <b>Password</b>, ketik data akun siswa, lalu ketuk tombol <b>Masuk</b>. (Jika belum punya akun, tunjukkan tombol daftar dan pilihan peran "Siswa / Anak".)</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Pertama, masuk dulu ke akunmu. Ketik nama pengguna dan kata sandimu, lalu tekan tombol Masuk. Kalau belum punya akun, minta bantuan guru atau orang tua untuk mendaftar sebagai Siswa."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A3</span><span class="title">Halaman Utama &amp; Petunjuk Singkat</span><span class="dur">± 25 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Halaman Utama muncul. Tampilkan pop-up <b>Petunjuk Singkat</b> berisi 4 langkah: <b>1) Ayo Belajar, 2) Ayo Catat, 3) Ayo Jawab, 4) Papan Peringkat</b>. Ketuk satu langkah untuk membuka penjelasannya, lalu ketuk tombol <b>Mengerti</b>. Tunjukkan juga menu di bawah layar: Halaman Utama, Ayo Belajar, Ayo Catat, Ayo Jawab, Papan Peringkat.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Begitu masuk, kamu akan disambut Petunjuk Singkat. Di sini ada empat langkah seru yang bisa kamu lakukan setiap hari: pertama Ayo Belajar lewat video, kedua Ayo Catat minumanmu, ketiga Ayo Jawab kuisnya, dan keempat lihat namamu di Papan Peringkat. Kalau sudah paham, tekan Mengerti. Semua menu ini bisa kamu buka lewat tombol di bagian bawah layar."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A4</span><span class="title">Aktivitas Harian &amp; Teman Minumku</span><span class="dur">± 22 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Geser turun di Halaman Utama. Sorot kartu <b>Aktivitas Harian</b>: angka <b>Bintang Hari Ini</b>, <b>Prestasiku</b> (jumlah hari berturut-turut), <b>Catatan 7 Hari</b>, dan tombol <b>Catat Sekarang</b>. Ketuk tombol itu hingga berubah menjadi <b>Sudah Catat Hari Ini</b>. Lalu sorot kartu <b>Teman Minumku</b> (karakter/avatar) di atasnya.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Di Halaman Utama ada Aktivitas Harian. Setiap hari, tekan Catat Sekarang untuk mengumpulkan bintang dan menambah prestasimu — semakin rajin, semakin banyak poin yang kamu dapat! Jangan lupa kenalan dengan Teman Minumku, karakter lucu yang menemanimu menjaga cairan tubuh."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A5</span><span class="title">Langkah 1 — Ayo Belajar</span><span class="dur">± 30 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Ketuk menu <b>Ayo Belajar</b>. Tampilkan judul <b>Pembelajaran Keseimbangan Cairan Tubuh</b> dan video pembelajaran hari ini (label hari, mis. "Hari ke-1 — Senin"). Putar video sebentar, lalu ketuk <b>Mulai Kuis</b>. Tampilkan satu soal dengan pilihan jawaban; ketuk satu jawaban dan tunjukkan <b>animasi benar/salah</b>. Terakhir, sorot tombol <b>Kembali</b> dan <b>Ayo Lanjutkan</b>.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Langkah pertama, Ayo Belajar. Setiap hari ada satu video pembelajaran tentang keseimbangan cairan tubuh — tonton sampai selesai, ya. Setelah menonton, kerjakan kuisnya. Pilih jawaban yang menurutmu benar, dan aplikasi akan langsung memberitahu apakah jawabanmu tepat. Kalau sudah, tekan Ayo Lanjutkan untuk ke langkah berikutnya."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A6</span><span class="title">Langkah 2 — Ayo Catat</span><span class="dur">± 38 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Buka menu <b>Ayo Catat</b>. Urutkan dari atas: (1) pilih <b>Aktivitas Hari Ini</b> — Rendah, Sedang, atau Tinggi; (2) di <b>Tambah Minuman</b> pilih tanggal, waktu (pagi/siang/sore/malam), jenis minuman (mis. Air putih, Air kelapa, Teh tawar), dan volume (mis. 250 ml), lalu ketuk <b>Simpan Minum</b>; (3) sorot kartu <b>Keseimbangan Cairan Tubuh Kamu</b> yang menampilkan total vs target dan status <b>Baik</b> / <b>Tidak Baik</b>; (4) sorot kartu <b>Target Minum Harian</b> (perhitungan FBB × FG + FA); (5) putar sebentar <b>Video Pesan Penting</b> yang sesuai status. Tutup dengan tombol <b>Ayo Lanjutkan</b>.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Langkah kedua, Ayo Catat. Pertama, pilih dulu aktivitasmu hari ini — apakah santai, sedang, atau banyak bergerak; ini membantu menghitung kebutuhan minummu. Lalu catat setiap kali kamu minum: pilih waktunya, jenis minumannya, dan jumlahnya, kemudian tekan Simpan. Aplikasi akan menghitung apakah cairan tubuhmu hari ini sudah Baik atau masih Tidak Baik. Tonton juga Video Pesan Penting yang muncul sesuai hasilmu, supaya kamu makin semangat minum air putih."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A7</span><span class="title">Langkah 3 — Ayo Jawab</span><span class="dur">± 24 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Buka menu <b>Ayo Jawab</b>. Tampilkan judul <b>Pengetahuan dan Sikap Kamu</b>. Pilih salah satu kuis (Kuis Pengetahuan atau Kuis Sikap), jawab pertanyaan satu per satu lewat tombol pilihan, lalu tampilkan layar hasil/skor. Tunjukkan tombol <b>Kembali</b> dan <b>Ayo Lanjutkan</b>.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Langkah ketiga, Ayo Jawab. Di sini kamu mengisi kuis tentang pengetahuan dan sikap menjaga keseimbangan cairan tubuh. Jawab setiap pertanyaan dengan jujur, dan di akhir kamu akan melihat hasilnya. Kuis ini bisa kamu kerjakan lagi setiap hari, lho."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A8</span><span class="title">Langkah 4 — Papan Peringkat</span><span class="dur">± 20 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Buka menu <b>Papan Peringkat</b>. Sorot peringkat dan total poin (XP) milik pengguna di bagian atas, lalu daftar <b>10 teratas</b>. Ketuk tombol <b>Lihat Lainnya</b> untuk menampilkan 10 nama berikutnya. Tutup dengan tombol <b>Selesai</b>.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Dan langkah terakhir — Papan Peringkat! Setiap kegiatanmu, mulai dari mencatat minum sampai menjawab kuis, menghasilkan poin. Kumpulkan poin sebanyak-banyaknya untuk naik ke peringkat teratas. Tekan Lihat Lainnya kalau ingin melihat lebih banyak teman."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-siswa">
+  <div class="head"><span class="num">A9</span><span class="title">Penutup Siswa</span><span class="dur">± 12 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Kembali ke Halaman Utama, tampilkan logo NEW HYDRA / karakter Teman Minumku.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Mudah, kan? Belajar, catat, jawab, dan lihat peringkat — lakukan setiap hari supaya tubuhmu selalu sehat dan cairannya selalu Baik. Sampai jumpa, teman-teman NEW HYDRA!"</div></div>
+  </div>
+</div>
+
+<!-- ============ BAGIAN B — ORANG TUA ============ -->
+<div class="section-title sec-ortu">
+  <div class="kicker">Bagian B</div>
+  <h2>Panduan Penggunaan — Role Orang Tua</h2>
+  <p>Menghubungkan akun anak dan memantau capaian minum harian.</p>
+</div>
+
+<div class="scene sc-ortu">
+  <div class="head"><span class="num">B1</span><span class="title">Pembuka</span><span class="dur">± 12 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Layar pembuka NEW HYDRA, lalu transisi ke halaman masuk.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Bapak dan Ibu, melalui aplikasi NEW HYDRA, Anda dapat ikut memantau kecukupan minum putra-putri Anda setiap hari. Mari kita pelajari langkah-langkahnya."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-ortu">
+  <div class="head"><span class="num">B2</span><span class="title">Masuk sebagai Orang Tua</span><span class="dur">± 16 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Halaman masuk: ketik <b>Username</b> dan <b>Password</b> akun orang tua, ketuk <b>Masuk</b>. (Bila mendaftar, tunjukkan pemilihan peran "Orang Tua" dan pengisian data seperti pendidikan, pekerjaan, dan penghasilan.)</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Silakan masuk menggunakan akun orang tua Anda. Jika belum memiliki akun, daftarkan diri dengan memilih peran Orang Tua, lalu lengkapi data singkat yang diminta."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-ortu">
+  <div class="head"><span class="num">B3</span><span class="title">Halaman Pantauan Orang Tua</span><span class="dur">± 22 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Halaman <b>Pantauan Orang Tua</b>. Sorot kartu profil (Pendidikan, Pekerjaan, Umur, Jenis Kelamin) dan kartu <b>Status Pendapatan</b>. Lalu sorot <b>Video Panduan Penggunaan Aplikasi</b>.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Setelah masuk, Anda berada di halaman Pantauan Orang Tua. Di bagian atas tampil ringkasan data Anda. Tersedia pula video panduan singkat yang bisa Anda tonton kapan saja untuk memahami aplikasi ini."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-ortu">
+  <div class="head"><span class="num">B4</span><span class="title">Menghubungkan Anak (Kode Siswa)</span><span class="dur">± 26 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Sorot kartu <b>Tambah Anak</b>. Ketik <b>kode siswa 5 huruf</b> milik anak (kode ini muncul di Halaman Utama akun anak), lalu ketuk <b>Tambah</b>. Anak yang berhasil ditambahkan muncul di daftar <b>Daftar Anak</b>.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Langkah penting pertama adalah menghubungkan akun anak Anda. Mintalah kode siswa — lima huruf yang tampil di halaman utama akun anak — lalu masukkan ke kolom Tambah Anak dan tekan Tambah. Setelah itu, nama anak akan muncul pada daftar Anda."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-ortu">
+  <div class="head"><span class="num">B5</span><span class="title">Memantau Capaian &amp; Memberi Feedback</span><span class="dur">± 30 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Pada kartu anak, sorot <b>Capaian Hari Ini</b> (jumlah ml diminum vs target) dan status (<b>Tercapai</b> atau <b>Kurang sekian ml</b>) beserta bilah progres. Jika target belum tercapai, ketuk <b>Beri Feedback</b>, tulis pesan dukungan, lalu ketuk <b>Kirim Feedback</b>. Tunjukkan juga tombol lonceng untuk <b>kirim pengingat</b>.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Pada setiap kartu anak, Anda bisa melihat capaian minumnya hari ini dibandingkan targetnya. Bila targetnya belum tercapai, kirimkan pesan dukungan melalui tombol Beri Feedback, atau ketuk tombol lonceng untuk mengirim pengingat agar si kecil segera menambah minum air putih."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-ortu">
+  <div class="head"><span class="num">B6</span><span class="title">Rincian Perkembangan Anak</span><span class="dur">± 26 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Buka menu <b>Perkembangan</b> (halaman <b>Rincian Perkembangan Anak</b>). Pilih nama anak di atas, lalu pilih rentang waktu: <b>Hari ini, 7 Hari, 14 Hari, Bulanan</b>, atau <b>Custom</b>. Sorot grafik <b>Tren Keseimbangan Cairan</b> dan ringkasan datanya.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Untuk melihat gambaran yang lebih lengkap, buka menu Perkembangan. Di sini Anda dapat memilih anak dan rentang waktu — harian, mingguan, hingga bulanan — lalu mengamati tren keseimbangan cairan anak dari waktu ke waktu. Ini membantu Anda memastikan kebiasaan minum anak terus membaik."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-ortu">
+  <div class="head"><span class="num">B7</span><span class="title">Penutup Orang Tua</span><span class="dur">± 12 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Kembali ke halaman Pantauan Orang Tua, tampilkan logo NEW HYDRA.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Dengan NEW HYDRA, memantau kecukupan cairan anak menjadi mudah dan menyenangkan. Mari bersama menjaga kesehatan keluarga, dimulai dari kebiasaan minum yang cukup setiap hari."</div></div>
+  </div>
+</div>
+
+<!-- ============ BAGIAN C — GURU ============ -->
+<div class="section-title sec-guru">
+  <div class="kicker">Bagian C</div>
+  <h2>Panduan Penggunaan — Role Guru</h2>
+  <p>Memantau seluruh siswa di sekolah dan mengirim pengingat.</p>
+</div>
+
+<div class="scene sc-guru">
+  <div class="head"><span class="num">C1</span><span class="title">Pembuka</span><span class="dur">± 12 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Layar pembuka NEW HYDRA, transisi ke halaman masuk.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Bapak dan Ibu Guru, NEW HYDRA membantu Anda memantau kebiasaan minum seluruh siswa di sekolah dalam satu layar. Berikut cara menggunakannya."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-guru">
+  <div class="head"><span class="num">C2</span><span class="title">Masuk sebagai Guru</span><span class="dur">± 16 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Halaman masuk: ketik <b>Username</b> dan <b>Password</b> akun guru, ketuk <b>Masuk</b>. (Bila mendaftar, tunjukkan pemilihan peran "Guru" dan pengisian sekolah, nomor induk, serta nomor HP.)</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Masuklah menggunakan akun guru Anda. Saat pendaftaran, pilih peran Guru dan lengkapi data sekolah, nomor induk, serta nomor telepon agar akun terhubung dengan sekolah yang tepat."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-guru">
+  <div class="head"><span class="num">C3</span><span class="title">Halaman Pantauan Guru</span><span class="dur">± 20 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Halaman <b>Pantauan Guru</b>. Sorot kartu sambutan dengan nama guru, lalu daftar informasi akun: <b>Sekolah, Nomor Induk, Nomor HP</b>. Tampilkan juga <b>Video Panduan Penggunaan Aplikasi</b>.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Setelah masuk, Anda berada di halaman Pantauan Guru. Di bagian atas tertera identitas akun Anda — sekolah, nomor induk, dan nomor telepon — beserta video panduan singkat penggunaan aplikasi."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-guru">
+  <div class="head"><span class="num">C4</span><span class="title">Daftar Siswa Sekolah</span><span class="dur">± 30 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Geser turun ke <b>Daftar Siswa Sekolah</b>. Sorot jumlah <b>Total</b> siswa, lalu kartu tiap siswa: <b>nama</b> dan <b>progress minum hari ini</b> (ml diminum vs target) dengan status <b>Baik</b> atau <b>Tidak Baik</b>. Tunjukkan tombol <b>Lihat Lebih Banyak</b> yang menambah 5 siswa setiap kali ditekan.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Pada bagian Daftar Siswa Sekolah, Anda dapat melihat seluruh siswa yang terdaftar di sekolah Anda beserta progres minum mereka hari ini. Status Baik berarti kebutuhan cairannya tercukupi, sedangkan Tidak Baik berarti masih kurang. Daftar ditampilkan bertahap — tekan Lihat Lebih Banyak untuk menampilkan siswa berikutnya."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-guru">
+  <div class="head"><span class="num">C5</span><span class="title">Mengirim Pengingat ke Siswa</span><span class="dur">± 22 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Pada siswa berstatus <b>Tidak Baik</b>, sorot kotak <b>Pengingat Guru</b>, lalu ketuk tombol <b>Kirim Pengingat</b>. Tunjukkan konfirmasi setelah pengingat terkirim.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Bila ada siswa yang minumnya belum cukup, Anda dapat langsung mengirim pengingat melalui tombol Kirim Pengingat. Pesan ini mendorong siswa untuk segera menambah minum air putih selama di sekolah."</div></div>
+  </div>
+</div>
+
+<div class="scene sc-guru">
+  <div class="head"><span class="num">C6</span><span class="title">Penutup Guru</span><span class="dur">± 12 dtk</span></div>
+  <div class="body">
+    <div class="row layar"><span class="label layar">Tampilan Layar</span><div class="text">Kembali ke halaman Pantauan Guru, tampilkan logo NEW HYDRA.</div></div>
+    <div class="row narasi"><span class="label narasi">Narasi</span><div class="text">"Dengan NEW HYDRA, memantau dan membimbing kebiasaan minum siswa menjadi lebih mudah. Mari kita dampingi generasi sehat yang terbiasa menjaga keseimbangan cairan tubuhnya sejak dini."</div></div>
+  </div>
+</div>
+
+<!-- ============ CATATAN PRODUKSI ============ -->
+<div class="section-title sec-intro">
+  <div class="kicker">Penutup</div>
+  <h2>Catatan Produksi &amp; Estimasi Durasi</h2>
+  <p>Panduan teknis untuk merangkai ketiga bagian menjadi video.</p>
+</div>
+
+<div>
+  <h3>Estimasi durasi tiap video</h3>
+  <ul class="clean">
+    <li><b>Video Role Siswa</b> — total ± 3 menit (9 adegan).</li>
+    <li><b>Video Role Orang Tua</b> — total ± 2 menit 20 detik (7 adegan).</li>
+    <li><b>Video Role Guru</b> — total ± 1 menit 55 detik (6 adegan).</li>
+  </ul>
+
+  <h3>Saran teknis</h3>
+  <ul class="clean">
+    <li>Rekam langsung dari aplikasi pada tampilan ponsel agar sesuai dengan yang dilihat pengguna.</li>
+    <li>Tambahkan teks/keterangan di layar saat menyebut nama tombol penting (mis. "Catat Sekarang", "Tambah Anak", "Kirim Pengingat").</li>
+    <li>Gunakan musik latar lembut; turunkan volumenya saat narasi berbicara.</li>
+    <li>Untuk bagian Siswa, gunakan intonasi ceria dan tempo santai; untuk Orang Tua dan Guru, gunakan nada tenang dan informatif.</li>
+    <li>Sensor/hapus data pribadi asli (nama, kode siswa, nomor HP) bila video akan disebarluaskan — gunakan akun contoh.</li>
+  </ul>
+
+  <div class="tip"><b>Catatan:</b> Istilah di dalam aplikasi memang sengaja memakai bahasa yang mudah dipahami anak — misalnya "keseimbangan cairan tubuh" (bukan "hidrasi"), status "Baik / Tidak Baik" (bukan "adekuat"), dan menu "Ayo Belajar, Ayo Catat, Ayo Jawab". Pastikan narasi memakai istilah yang sama agar penonton tidak bingung.</div>
+
+  <p class="footnote" style="text-align:center;color:#94a3b8;font-size:9pt;margin-top:18px;">— Selesai — Naskah Narasi Video Panduan Penggunaan Aplikasi NEW HYDRA —</p>
+</div>
+
+</body>
+</html>
