@@ -664,6 +664,13 @@ export default function DashboardPage() {
                   <p className="mt-2 text-sm text-violet-100">
                     Data guru sudah terhubung ke sekolah dan sudah tercatat sebagai role guru di aplikasi.
                   </p>
+                  <Link
+                    href="/tracker"
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-bold text-violet-700 transition-colors hover:bg-violet-50"
+                  >
+                    <Droplet size={16} />
+                    Isi Logbook Minum Siswa
+                  </Link>
                 </div>
                 <div className="rounded-2xl bg-white/15 p-3">
                   <GraduationCap size={30} />

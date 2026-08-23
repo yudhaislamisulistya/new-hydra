@@ -8,6 +8,7 @@ const navItems = [
   { href: "/admin/quizzes", label: "Kuis", icon: ClipboardList },
   { href: "/admin/education", label: "Edukasi & Video", icon: PlaySquare },
   { href: "/admin/schools", label: "Sekolah", icon: School2 },
+  { href: "/admin/logbook", label: "Isi Logbook Minum", icon: Droplets },
   { href: "/admin/activity", label: "Aktivitas Minum", icon: Activity },
 ];
 

@@ -13,6 +13,7 @@ export function BottomNav() {
   const navItems = profile?.role === "parent"
     ? [
         { name: "Pantauan", href: "/dashboard", icon: Users },
+        { name: "Isi Logbook", href: "/tracker", icon: Droplet },
         { name: "Perkembangan", href: "/progress", icon: BarChart3 },
         { name: "Profil", href: "/profile", icon: User },
       ]

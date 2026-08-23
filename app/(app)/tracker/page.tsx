@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, ArrowLeft, CheckCircle2, Clock3, Droplets, PlayCircle, Plus, Target } from "lucide-react";
 import Link from "next/link";
 import { Header } from "../../../components/layout/Header";
+import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
@@ -16,6 +17,7 @@ import {
   getHydrationPeriod,
 } from "../../../utils/hydrationInsights";
 import { createClient } from "../../../utils/api/client";
+import { getUserRoleLabel } from "../../../utils/authIdentity";
 
 const DRINK_VOLUMES = [100, 125, 150, 200, 250, 350, 500];
 const TRACKER_PERIOD_OPTIONS = [
@@ -81,22 +83,93 @@ type HydrationLogItem = {
   amount_ml: number;
   drink_type: string | null;
   logged_at: string;
+  recorded_by_name: string;
+  recorded_by_role: string;
+};
+
+type AccessibleStudent = {
+  id: string;
+  name: string;
+  student_code: string | null;
+  weight_kg: number | null;
+  gender: string | null;
+  daily_water_target_ml: number | null;
+};
+
+type AccessibleStudentQueryRow = Omit<AccessibleStudent, "name"> & {
+  profiles: { full_name: string | null } | { full_name: string | null }[] | null;
+};
+
+const normalizeAccessibleStudents = (rows: AccessibleStudentQueryRow[] | null): AccessibleStudent[] => {
+  return (rows || []).map((row) => {
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    return {
+      id: row.id,
+      name: profile?.full_name || "Siswa",
+      student_code: row.student_code,
+      weight_kg: row.weight_kg,
+      gender: row.gender,
+      daily_water_target_ml: row.daily_water_target_ml,
+    };
+  }).sort((first, second) => first.name.localeCompare(second.name, "id"));
 };
 
 export default function TrackerPage() {
   const { profile } = useUserStore();
   const hasEducationAccess = profile?.study_group !== "control";
-  const { addIntake, records } = useHydrationStore();
+  const { addIntake } = useHydrationStore();
   const today = formatLocalDateKey(new Date());
 
+  const [students, setStudents] = useState<AccessibleStudent[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [loadingStudents, setLoadingStudents] = useState(true);
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedPeriod, setSelectedPeriod] = useState<string>(getHydrationPeriod(new Date()));
   const [drinkType, setDrinkType] = useState("Air putih/air matang");
   const [volume, setVolume] = useState<number>(250);
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>("sedang");
   const [showSuccess, setShowSuccess] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [selectedDateLogs, setSelectedDateLogs] = useState<HydrationLogItem[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
+
+  const selectedStudent = useMemo(
+    () => students.find((student) => student.id === selectedStudentId) || null,
+    [selectedStudentId, students]
+  );
+  const selectedStudentName = selectedStudent?.name || "siswa";
+
+  useEffect(() => {
+    async function fetchAccessibleStudents() {
+      if (!profile?.id) return;
+
+      setLoadingStudents(true);
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("student_profiles")
+        .select("id, student_code, weight_kg, gender, daily_water_target_ml, profiles!student_profiles_id_fkey(full_name)");
+
+      if (error) {
+        console.error("Error fetching accessible students:", error);
+        setStudents([]);
+        setSelectedStudentId("");
+        setSaveError("Daftar siswa tidak dapat dimuat.");
+      } else {
+        const nextStudents = normalizeAccessibleStudents((data as AccessibleStudentQueryRow[] | null) || null);
+        setStudents(nextStudents);
+        setSelectedStudentId((current) => {
+          if (nextStudents.some((student) => student.id === current)) return current;
+          if (profile.role === "student" && nextStudents.some((student) => student.id === profile.id)) return profile.id;
+          return nextStudents[0]?.id || "";
+        });
+      }
+
+      setLoadingStudents(false);
+    }
+
+    void fetchAccessibleStudents();
+  }, [profile?.id, profile?.role]);
 
   const fetchSelectedDateLogs = useCallback(async (studentId: string, dateKey: string) => {
     const supabase = createClient();
@@ -106,7 +179,7 @@ export default function TrackerPage() {
 
     const { data, error } = await supabase
       .from("hydration_logs")
-      .select("id, amount_ml, drink_type, logged_at")
+      .select("id, amount_ml, drink_type, logged_at, recorded_by_name, recorded_by_role")
       .eq("student_id", studentId)
       .gte("logged_at", startOfDay.toISOString())
       .lt("logged_at", endOfDay.toISOString())
@@ -123,14 +196,19 @@ export default function TrackerPage() {
   }, []);
 
   useEffect(() => {
-    if (!profile?.id) return;
+    if (!selectedStudentId) {
+      setSelectedDateLogs([]);
+      setLoadingLogs(false);
+      return;
+    }
 
+    setLoadingLogs(true);
     const timer = window.setTimeout(() => {
-      void fetchSelectedDateLogs(profile.id, selectedDate);
+      void fetchSelectedDateLogs(selectedStudentId, selectedDate);
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [fetchSelectedDateLogs, profile?.id, selectedDate]);
+  }, [fetchSelectedDateLogs, selectedDate, selectedStudentId]);
 
   const buildSelectedLoggedAtIso = useCallback((dateKey: string, periodKey: string) => {
     const [year, month, day] = dateKey.split("-").map(Number);
@@ -149,40 +227,43 @@ export default function TrackerPage() {
 
   // Target dihitung dari berat badan, jenis kelamin, dan aktivitas hari ini (FBB × FG + FA)
   const dailyTarget = useMemo(() => {
-    if (profile?.role === "student") {
-      return calculateRequiredIntake({
-        weight_kg: profile?.weight_kg || 25,
-        gender: (profile?.gender || "L") as Gender,
-        activity_level: activityLevel,
-      });
-    }
-    return records[selectedDate]?.required_intake_ml || 1500;
-  }, [profile?.role, profile?.weight_kg, profile?.gender, activityLevel, records, selectedDate]);
+    if (!selectedStudent) return 1500;
+    return calculateRequiredIntake({
+      weight_kg: selectedStudent.weight_kg || 25,
+      gender: (selectedStudent.gender || "L") as Gender,
+      activity_level: activityLevel,
+    });
+  }, [activityLevel, selectedStudent]);
 
   // Rincian perhitungan kebutuhan cairan (FBB × FG + FA)
   const fbb = (() => {
-    const w = profile?.weight_kg || 25;
+    const w = selectedStudent?.weight_kg || 25;
     if (w <= 10) return 100 * w;
     if (w <= 20) return 1000 + 50 * (w - 10);
     return 1500 + 20 * (w - 20);
   })();
-  const fg = profile?.gender === "female" ? 1.0 : 1.05;
+  const fg = selectedStudent?.gender === "female" ? 1.0 : 1.05;
   const faMap: Record<ActivityLevel, number> = { rendah: 0, sedang: 375, tinggi: 750 };
   const fa = faMap[activityLevel];
 
   const handleSave = async () => {
-    if (!profile) return;
+    if (!selectedStudentId || saving) return;
 
+    setSaving(true);
+    setSaveError("");
     const loggedAt = buildSelectedLoggedAtIso(selectedDate, selectedPeriod);
-
-    const isSaved = await addIntake(profile.id, selectedDate, volume, drinkType, dailyTarget, activityLevel, loggedAt);
+    const isSaved = await addIntake(selectedStudentId, selectedDate, volume, drinkType, dailyTarget, activityLevel, loggedAt);
 
     if (isSaved) {
       setShowSuccess(true);
       setLoadingLogs(true);
-      void fetchSelectedDateLogs(profile.id, selectedDate);
+      void fetchSelectedDateLogs(selectedStudentId, selectedDate);
       setTimeout(() => setShowSuccess(false), 2000);
+    } else {
+      setSaveError("Catatan minum gagal disimpan. Pastikan akun Anda berhak mengakses siswa ini.");
     }
+
+    setSaving(false);
   };
 
   const totalSelectedDate = useMemo(
@@ -204,12 +285,55 @@ export default function TrackerPage() {
 
   return (
     <>
-      <Header title="Catatan Minum Harian" />
+      {profile?.role === "admin" ? (
+        <AdminHeader title="Pengisian Logbook Minum" />
+      ) : (
+        <Header title="Catatan Minum Harian" />
+      )}
       <div className="p-6 space-y-6 pb-24">
+        <Card className="border-2 border-cyan-100 bg-cyan-50/60">
+          <CardContent className="p-5 space-y-3">
+            {profile?.role !== "student" && (
+              <Select
+                label="Siswa yang Dicatat"
+                value={selectedStudentId}
+                onChange={(event) => {
+                  setSaveError("");
+                  setLoadingLogs(true);
+                  setSelectedStudentId(event.target.value);
+                }}
+                disabled={loadingStudents || students.length === 0}
+                options={students.map((student) => ({
+                  value: student.id,
+                  label: student.name + (student.student_code ? " — " + student.student_code : ""),
+                }))}
+              />
+            )}
+            {loadingStudents ? (
+              <p className="text-sm text-cyan-700">Memuat siswa yang dapat Anda akses...</p>
+            ) : selectedStudent ? (
+              <div className="text-sm text-cyan-800">
+                <p className="font-bold">Logbook minum: {selectedStudent.name}</p>
+                <p className="mt-1 text-xs leading-5 text-cyan-700">
+                  Pengisi dicatat otomatis sebagai {profile?.nickname || "Pengguna"} ({getUserRoleLabel(profile?.role)}). Identitas ini tidak dapat diubah setelah log tersimpan.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm font-semibold text-amber-700">Belum ada siswa yang terhubung dan dapat dicatat oleh akun ini.</p>
+            )}
+          </CardContent>
+        </Card>
+
         {showSuccess && (
           <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-3 animate-fade-in-up">
             <CheckCircle2 className="text-green-500" />
-            <p className="font-semibold text-sm">Berhasil mencatat minum!</p>
+            <p className="font-semibold text-sm">Berhasil mencatat minum untuk {selectedStudentName}!</p>
+          </div>
+        )}
+
+        {saveError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+            {saveError}
           </div>
         )}
 
@@ -220,7 +344,7 @@ export default function TrackerPage() {
               <Activity size={18} className="text-blue-500" />
               <h3 className="font-bold text-slate-800 text-sm">Aktivitas Hari Ini</h3>
             </div>
-            <p className="text-xs text-slate-500 mb-3">Pilih aktivitasmu hari ini supaya kebutuhan minum bisa dihitung dengan tepat.</p>
+            <p className="text-xs text-slate-500 mb-3">Pilih aktivitas {profile?.role === "student" ? "kamu" : selectedStudentName} hari ini supaya kebutuhan minum bisa dihitung dengan tepat.</p>
             <div className="grid grid-cols-3 gap-2">
               {ACTIVITY_OPTIONS.map((opt) => (
                 <button
@@ -299,9 +423,9 @@ export default function TrackerPage() {
               </div>
             </div>
 
-            <Button className="w-full mt-4 gap-2" size="lg" onClick={handleSave}>
+            <Button className="w-full mt-4 gap-2" size="lg" onClick={handleSave} disabled={!selectedStudent || saving || loadingStudents}>
               <Plus size={20} />
-              Simpan Minum ({volume}ml)
+              {saving ? "Menyimpan..." : "Simpan Minum (" + volume + "ml)"}
             </Button>
           </CardContent>
         </Card>
@@ -311,7 +435,7 @@ export default function TrackerPage() {
           <CardContent className="p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-500">Keseimbangan Cairan Tubuh Kamu</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-blue-500">Keseimbangan Cairan Tubuh {profile?.role === "student" ? "Kamu" : selectedStudentName}</p>
                 <h2 className="text-2xl font-extrabold text-slate-800 mt-1">{totalSelectedDate} / {dailyTarget} ml</h2>
                 <p className="text-sm text-slate-500 mt-1">Target harian akan dinilai otomatis sebagai baik atau tidak baik.</p>
               </div>
@@ -348,11 +472,11 @@ export default function TrackerPage() {
             <div className="bg-white/10 rounded-xl p-4 text-base">
               <p className="text-blue-100 font-bold mb-2 text-sm uppercase tracking-wide">Perhitungan: FBB × FG + FA</p>
               <div className="flex justify-between text-blue-50 py-1.5">
-                <span>FBB (BB: {profile?.weight_kg || 25}kg)</span>
+                <span>FBB (BB: {selectedStudent?.weight_kg || 25}kg)</span>
                 <span className="font-extrabold text-white">{Math.round(fbb)} ml</span>
               </div>
               <div className="flex justify-between text-blue-50 py-1.5">
-                <span>FG ({profile?.gender === "female" ? "Perempuan" : "Laki-laki"})</span>
+                <span>FG ({selectedStudent?.gender === "female" ? "Perempuan" : "Laki-laki"})</span>
                 <span className="font-extrabold text-white">× {fg}</span>
               </div>
               <div className="flex justify-between text-blue-50 py-1.5">
@@ -368,6 +492,8 @@ export default function TrackerPage() {
         </Card>
 
         {/* 4. Video Pesan Penting Keseimbangan Cairan Tubuh Kamu */}
+        {profile?.role === "student" && (
+          <>
         <Card className={`border-2 ${adequacyStatus.isAdequate ? "border-emerald-100 bg-emerald-50/60" : "border-amber-100 bg-amber-50/60"}`}>
           <CardContent className="p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
@@ -438,13 +564,15 @@ export default function TrackerPage() {
             Ayo Lanjutkan
           </Link>
         </div>
+          </>
+        )}
 
         {/* Riwayat */}
         <Card className="border border-slate-200">
           <CardContent className="p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="font-bold text-slate-800 text-base">Riwayat Catatan Hari Ini</h3>
+                <h3 className="font-bold text-slate-800 text-base">Riwayat Catatan {selectedStudentName}</h3>
                 <p className="text-xs text-slate-500 mt-1">Pembagian otomatis berdasarkan waktu pencatatan pada tanggal yang dipilih.</p>
               </div>
               <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
@@ -488,6 +616,9 @@ export default function TrackerPage() {
                                   <span>{new Date(log.logged_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
                                 </div>
                                 <p className="font-bold text-slate-800 text-sm mt-1">{log.drink_type || "Air putih"}</p>
+                                <p className="mt-1 text-[11px] font-medium text-slate-500">
+                                  Diisi oleh {log.recorded_by_name} ({getUserRoleLabel(log.recorded_by_role)})
+                                </p>
                               </div>
                               <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
                                 {log.amount_ml} ml

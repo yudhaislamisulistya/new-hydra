@@ -10,6 +10,7 @@ import Link from "next/link";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { calculateBasicFluidNeeds, calculateIntakeFromStoredBaseNeed, formatLocalDateKey, getGenderFactor, type LooseGender } from "../../../utils/hydrationCalc";
 import { buildHydrationCorrections, buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
+import { getUserRoleLabel } from "../../../utils/authIdentity";
 
 const ADMIN_ACTIVITY_FACTORS = {
   rendah: 0,
@@ -32,6 +33,8 @@ type HydrationLog = {
   amount_ml: number;
   drink_type: string | null;
   logged_at: string;
+  recorded_by_name: string;
+  recorded_by_role: string;
 };
 
 type ChartDatum = {
@@ -117,7 +120,7 @@ function ActivityDetailContent() {
 
         const { data: logsData, error } = await supabase
           .from("hydration_logs")
-          .select("id, amount_ml, drink_type, logged_at")
+          .select("id, amount_ml, drink_type, logged_at, recorded_by_name, recorded_by_role")
           .eq("student_id", studentId)
           .order("logged_at", { ascending: false });
 
@@ -300,7 +303,7 @@ function ActivityDetailContent() {
     if (!student) return;
 
     const csvRows = [
-      ["Tanggal", "Jam", "Periode", "Jenis Minuman", "Volume (ml)"],
+      ["Tanggal", "Jam", "Periode", "Jenis Minuman", "Volume (ml)", "Pengisi", "Peran Pengisi"],
       ...detailLogs.map((log) => {
         const logDate = new Date(log.logged_at);
         const hour = logDate.getHours();
@@ -311,6 +314,8 @@ function ActivityDetailContent() {
           period,
           log.drink_type || "Air putih",
           String(log.amount_ml),
+          log.recorded_by_name,
+          getUserRoleLabel(log.recorded_by_role),
         ];
       }),
     ];
@@ -358,6 +363,7 @@ function ActivityDetailContent() {
                 <th>Jam</th>
                 <th>Jenis Minuman</th>
                 <th>Volume</th>
+                <th>Pengisi</th>
               </tr>
             </thead>
             <tbody>
@@ -369,6 +375,7 @@ function ActivityDetailContent() {
                     <td>${logDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</td>
                     <td>${log.drink_type || "Air putih"}</td>
                     <td>${log.amount_ml} ml</td>
+                    <td>${log.recorded_by_name} (${getUserRoleLabel(log.recorded_by_role)})</td>
                   </tr>
                 `;
               }).join("")}
@@ -656,6 +663,9 @@ function ActivityDetailContent() {
                               </p>
                               <p className="mt-1 text-xs text-slate-500 font-medium">
                                 {logDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} • {log.drink_type || "Air Putih"}
+                              </p>
+                              <p className="mt-1 text-[11px] font-medium text-slate-400">
+                                Diisi oleh {log.recorded_by_name} ({getUserRoleLabel(log.recorded_by_role)})
                               </p>
                             </div>
                           </div>

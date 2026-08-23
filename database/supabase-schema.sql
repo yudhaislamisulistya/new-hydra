@@ -233,7 +233,10 @@ CREATE TABLE IF NOT EXISTS "public"."hydration_logs" (
     "amount_ml" integer NOT NULL,
     "drink_type" "text" DEFAULT 'water'::"text",
     "logged_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL
+    "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "recorded_by" "uuid" NOT NULL,
+    "recorded_by_name" "text" DEFAULT 'Siswa'::"text" NOT NULL,
+    "recorded_by_role" "public"."user_role" DEFAULT 'student'::"public"."user_role" NOT NULL
 );
 
 
@@ -620,7 +623,6 @@ ALTER TABLE ONLY "public"."hydration_feedback"
 
 ALTER TABLE ONLY "public"."hydration_logs"
     ADD CONSTRAINT "hydration_logs_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."student_profiles"("id") ON DELETE CASCADE;
-
 
 
 ALTER TABLE ONLY "public"."parent_children"

@@ -243,6 +243,58 @@ CREATE TRIGGER protect_student_study_group
 BEFORE UPDATE OF study_group ON public.student_profiles
 FOR EACH ROW EXECUTE FUNCTION public.protect_student_study_group();
 
+CREATE OR REPLACE FUNCTION public.stamp_hydration_log_recorder()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  actor_id uuid;
+  actor_name text;
+  actor_role public.user_role;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.recorded_by IS DISTINCT FROM OLD.recorded_by
+      OR NEW.recorded_by_name IS DISTINCT FROM OLD.recorded_by_name
+      OR NEW.recorded_by_role IS DISTINCT FROM OLD.recorded_by_role THEN
+      RAISE EXCEPTION 'Hydration log recorder attribution is immutable' USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  actor_id := auth.uid();
+  IF actor_id IS NULL THEN
+    IF NEW.recorded_by IS NULL OR NEW.recorded_by_name IS NULL OR NEW.recorded_by_role IS NULL THEN
+      RAISE EXCEPTION 'Hydration log recorder attribution is required' USING ERRCODE = '23502';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  SELECT
+    profile.id,
+    coalesce(nullif(trim(profile.full_name), ''), profile.username, 'Pengguna'),
+    profile.role
+  INTO actor_id, actor_name, actor_role
+  FROM public.profiles profile
+  WHERE profile.id = actor_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Hydration log recorder profile was not found' USING ERRCODE = '42501';
+  END IF;
+
+  NEW.recorded_by := actor_id;
+  NEW.recorded_by_name := actor_name;
+  NEW.recorded_by_role := actor_role;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS stamp_hydration_log_recorder ON public.hydration_logs;
+CREATE TRIGGER stamp_hydration_log_recorder
+BEFORE INSERT OR UPDATE ON public.hydration_logs
+FOR EACH ROW EXECUTE FUNCTION public.stamp_hydration_log_recorder();
+
 CREATE OR REPLACE FUNCTION public.protect_teacher_school()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -362,9 +414,10 @@ CREATE POLICY hydration_logs_read_accessible
 ON public.hydration_logs FOR SELECT TO authenticated
 USING (public.can_access_student(student_id));
 
-CREATE POLICY hydration_logs_insert_self
+DROP POLICY IF EXISTS hydration_logs_insert_self ON public.hydration_logs;
+CREATE POLICY hydration_logs_insert_accessible
 ON public.hydration_logs FOR INSERT TO authenticated
-WITH CHECK (student_id = auth.uid());
+WITH CHECK (recorded_by = auth.uid() AND public.can_access_student(student_id));
 
 CREATE POLICY hydration_logs_update_self
 ON public.hydration_logs FOR UPDATE TO authenticated

@@ -78,6 +78,9 @@ export interface Database {
           drink_type: string | null
           logged_at: string
           created_at: string
+          recorded_by: string
+          recorded_by_name: string
+          recorded_by_role: 'student' | 'parent' | 'admin' | 'teacher'
         }
         Insert: {
           id?: string
@@ -86,6 +89,9 @@ export interface Database {
           drink_type?: string | null
           logged_at?: string
           created_at?: string
+          recorded_by?: string | null
+          recorded_by_name?: string
+          recorded_by_role?: 'student' | 'parent' | 'admin' | 'teacher'
         }
         Update: {
           id?: string
@@ -94,6 +100,9 @@ export interface Database {
           drink_type?: string | null
           logged_at?: string
           created_at?: string
+          recorded_by?: string | null
+          recorded_by_name?: string
+          recorded_by_role?: 'student' | 'parent' | 'admin' | 'teacher'
         }
       }
       education_materials: {

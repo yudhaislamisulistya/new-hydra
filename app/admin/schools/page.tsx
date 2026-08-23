@@ -8,6 +8,7 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
 import { buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
+import { getUserRoleLabel } from "../../../utils/authIdentity";
 
 type SchoolRecord = {
   id: string;
@@ -46,6 +47,8 @@ type StudentHydrationLog = {
   amount_ml: number;
   drink_type: string | null;
   logged_at: string;
+  recorded_by_name: string;
+  recorded_by_role: string;
 };
 
 type SchoolStudentDetail = {
@@ -329,7 +332,7 @@ export default function AdminSchoolsPage() {
 
         const { data: logsData, error: logsError } = await supabase
           .from("hydration_logs")
-          .select("id, student_id, amount_ml, drink_type, logged_at")
+          .select("id, student_id, amount_ml, drink_type, logged_at, recorded_by_name, recorded_by_role")
           .in("student_id", studentIds)
           .gte("logged_at", startOfToday.toISOString())
           .lte("logged_at", endOfToday.toISOString())
@@ -715,6 +718,7 @@ export default function AdminSchoolsPage() {
                                             hour: "2-digit",
                                             minute: "2-digit",
                                           })}
+                                          {" • Diisi oleh "}{log.recorded_by_name} ({getUserRoleLabel(log.recorded_by_role)})
                                         </p>
                                       </div>
                                       <p className="text-sm font-bold text-slate-700">{log.amount_ml} ml</p>
