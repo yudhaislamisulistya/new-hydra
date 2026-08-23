@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createClient } from "../utils/api/client";
 
 export type UserRole = "student" | "parent" | "admin" | "teacher" | null;
+export type StudyGroup = "control" | "intervention";
 
 type SchoolRelation = {
   name: string | null;
@@ -24,6 +25,7 @@ export interface UserProfile {
   school_name?: string;
   class_level?: number | null;
   child_order?: number | null;
+  study_group?: StudyGroup;
   phone?: string;
   employee_number?: string;
   full_title?: string;
@@ -77,7 +79,7 @@ export const useUserStore = create<UserState>((set) => ({
       if (role === "student") {
         const { data: studentData } = await supabase
           .from("student_profiles")
-          .select("birth_date, gender, weight_kg, height_cm, student_code, school_id, class_level, child_order, schools(name)")
+          .select("birth_date, gender, weight_kg, height_cm, student_code, school_id, class_level, child_order, study_group, schools(name)")
           .eq("id", user.id)
           .single();
 
@@ -99,6 +101,7 @@ export const useUserStore = create<UserState>((set) => ({
             school_name: schoolRow?.name || "",
             class_level: studentData.class_level || null,
             child_order: studentData.child_order || null,
+            study_group: studentData.study_group === "control" ? "control" : "intervention",
           };
         }
       }

@@ -6,6 +6,7 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { PlayCircle, Award, CheckCircle2, ArrowLeft, Droplet } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
 
@@ -534,6 +535,8 @@ const DAY_NAMES = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Mi
 
 export default function EducationPage() {
   const { profile } = useUserStore();
+  const router = useRouter();
+  const hasEducationAccess = profile?.study_group !== "control";
   const [materials, setMaterials] = useState<EducationMaterial[]>([]);
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -545,8 +548,17 @@ export default function EducationPage() {
   const dayName = `Hari ke-${dayNumber} — ${DAY_NAMES[dayNumber]}`;
 
   useEffect(() => {
+    if (profile?.role === "student" && !hasEducationAccess) {
+      router.replace("/dashboard");
+    }
+  }, [hasEducationAccess, profile?.role, router]);
+
+  useEffect(() => {
     async function fetchEducation() {
-      if (!profile?.id) return;
+      if (!profile?.id || !hasEducationAccess) {
+        setLoading(false);
+        return;
+      }
 
       const supabase = createClient();
 
@@ -630,11 +642,13 @@ export default function EducationPage() {
     }
 
     void fetchEducation();
-  }, [profile?.id]);
+  }, [hasEducationAccess, profile?.id]);
 
   const handleCompletedSurvey = (surveyId: string) => {
     setCompletedSurveyIds((prev) => new Set(prev).add(surveyId));
   };
+
+  if (!hasEducationAccess) return null;
 
   return (
     <>

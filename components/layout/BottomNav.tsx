@@ -18,7 +18,7 @@ export function BottomNav() {
       ]
     : [
         { name: "Halaman Utama", href: "/dashboard", icon: Home },
-        { name: "Ayo Belajar", href: "/education", icon: BookOpen },
+        ...(profile?.study_group === "control" ? [] : [{ name: "Ayo Belajar", href: "/education", icon: BookOpen }]),
         { name: "Ayo Catat", href: "/tracker", icon: Droplet },
         { name: "Ayo Jawab", href: "/survey", icon: ClipboardList },
         { name: "Papan Peringkat", href: "/leaderboard", icon: Trophy },

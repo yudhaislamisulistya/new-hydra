@@ -27,6 +27,11 @@ The database volume is external so docker compose down -v cannot delete it.
 Initialization scripts only run when this volume is empty. They restore Auth
 users, public data, local RPC functions, and RLS policies.
 
+For an existing database volume, apply new migrations before restarting:
+
+    docker exec -i hydra_postgres_db sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/migrations/20260823_add_student_study_group.sql
+    docker exec -i hydra_postgres_db sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/local-security.sql
+
 Health checks:
 
     curl -fsS http://127.0.0.1:7108/

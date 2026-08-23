@@ -199,6 +199,7 @@ const normalizeTeacherStudents = (rows: TeacherStudentQueryRow[] | null): Teache
 
 export default function DashboardPage() {
   const { profile } = useUserStore();
+  const hasEducationAccess = profile?.study_group !== "control";
   const today = formatLocalDateKey(new Date());
   const { records, fetchLogs } = useHydrationStore();
   // Aktivitas (FA) sekarang diisi di menu "Ayo Catat". Dashboard memakai default sedang untuk ringkasan.
@@ -1071,7 +1072,7 @@ export default function DashboardPage() {
                     <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/80">Selamat Datang</p>
                     <h2 className="mt-2 text-xl font-extrabold sm:text-2xl">Petunjuk Singkat</h2>
                     <p className="mt-2 text-xs text-white/85 sm:text-sm">
-                      Ada 4 langkah seru yang bisa kamu lakukan setiap hari di aplikasi ini.
+                      Ada {hasEducationAccess ? 4 : 3} langkah seru yang bisa kamu lakukan setiap hari di aplikasi ini.
                     </p>
                   </div>
                   <button
@@ -1087,23 +1088,23 @@ export default function DashboardPage() {
               <div className="flex-1 overflow-y-auto p-4 sm:p-6">
                 <div className="space-y-3">
                 {[
-                  {
-                    title: "1. Ayo Belajar",
+                  ...(hasEducationAccess ? [{
+                    title: "Ayo Belajar",
                     detail: "Ayo tonton 5 video pembelajaran tentang pentingnya keseimbangan cairan bagi tubuh kamu.",
                     accent: "bg-blue-50 border-blue-200 text-blue-700",
-                  },
+                  }] : []),
                   {
-                    title: "2. Ayo Catat",
+                    title: "Ayo Catat",
                     detail: "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lihat hasil dan jangan lupa tonton video pesan penting keseimbangan cairan tubuh kamu.",
                     accent: "bg-cyan-50 border-cyan-200 text-cyan-700",
                   },
                   {
-                    title: "3. Ayo Jawab",
+                    title: "Ayo Jawab",
                     detail: "Ayo isi pengetahuan dan sikap tentang keseimbangan cairan tubuh.",
                     accent: "bg-emerald-50 border-emerald-200 text-emerald-700",
                   },
                   {
-                    title: "4. Papan Peringkat",
+                    title: "Papan Peringkat",
                     detail: "Ayo lihat peringkat keseimbangan cairan kamu hari ini.",
                     accent: "bg-amber-50 border-amber-200 text-amber-700",
                   },
@@ -1115,7 +1116,7 @@ export default function DashboardPage() {
                       className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                     >
                       <div>
-                        <p className="text-sm font-black">{item.title}</p>
+                        <p className="text-sm font-black">{index + 1}. {item.title}</p>
                         <p className="mt-1 text-[11px] font-semibold opacity-80 sm:text-xs">
                           {expandedDailyGuideStep === index ? "Sembunyikan detail" : "Lihat detail langkah"}
                         </p>
@@ -1131,7 +1132,11 @@ export default function DashboardPage() {
                 ))}
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                  Urutan harian: <span className="font-bold text-slate-800">Ayo Belajar, lalu Ayo Catat, lalu Ayo Jawab, dan terakhir Papan Peringkat.</span>
+                  Urutan harian: <span className="font-bold text-slate-800">
+                    {hasEducationAccess
+                      ? "Ayo Belajar, lalu Ayo Catat, lalu Ayo Jawab, dan terakhir Papan Peringkat."
+                      : "Ayo Catat, lalu Ayo Jawab, dan terakhir Papan Peringkat."}
+                  </span>
                 </div>
                 </div>
               </div>
@@ -1228,7 +1233,7 @@ export default function DashboardPage() {
 
             <div className="space-y-2">
               {[
-                { title: "Ayo Belajar", detail: "Ayo tonton 5 video pembelajaran tentang pentingnya keseimbangan cairan bagi tubuh kamu." },
+                ...(hasEducationAccess ? [{ title: "Ayo Belajar", detail: "Ayo tonton 5 video pembelajaran tentang pentingnya keseimbangan cairan bagi tubuh kamu." }] : []),
                 { title: "Ayo Catat", detail: "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lihat hasil keseimbangan cairan tubuh kamu serta jangan lupa tonton video pesan penting keseimbangan cairan tubuh kamu." },
                 { title: "Ayo Jawab", detail: "Ayo isi pengetahuan dan sikap tentang keseimbangan cairan tubuh." },
                 { title: "Papan Peringkat", detail: "Ayo lihat peringkat keseimbangan cairan kamu hari ini." },
@@ -1241,13 +1246,15 @@ export default function DashboardPage() {
               ))}
             </div>
 
-            <Link
-              href="/education"
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
-            >
-              <PlayCircle size={18} />
-              Ayo Mulai
-            </Link>
+            {hasEducationAccess && (
+              <Link
+                href="/education"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+              >
+                <PlayCircle size={18} />
+                Ayo Mulai
+              </Link>
+            )}
           </CardContent>
         </Card>
 
@@ -1359,10 +1366,16 @@ export default function DashboardPage() {
             <AlertCircle className="text-amber-500 shrink-0 mt-0.5" />
             <div>
               <h3 className="font-bold text-amber-800 text-sm">Waktunya Minum!</h3>
-              <p className="text-xs text-amber-700 mt-1">Kamu belum mencapai target minum hari ini. Jangan lupa nonton video edukasi ya!</p>
-              <Link href="/education" className="inline-block mt-2 text-xs font-bold text-blue-600 bg-white px-3 py-1.5 rounded-full shadow-sm border border-amber-100">
-                Tonton Video
-              </Link>
+              <p className="text-xs text-amber-700 mt-1">
+                {hasEducationAccess
+                  ? "Kamu belum mencapai target minum hari ini. Jangan lupa nonton video edukasi ya!"
+                  : "Kamu belum mencapai target minum hari ini. Ayo tambah asupan minummu!"}
+              </p>
+              {hasEducationAccess && (
+                <Link href="/education" className="inline-block mt-2 text-xs font-bold text-blue-600 bg-white px-3 py-1.5 rounded-full shadow-sm border border-amber-100">
+                  Tonton Video
+                </Link>
+              )}
             </div>
           </div>
         )}

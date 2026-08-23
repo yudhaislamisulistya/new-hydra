@@ -15,6 +15,7 @@ import { createClient } from "../../utils/api/client";
 
 type Role = "student" | "parent" | "admin" | "teacher";
 type Gender = "male" | "female";
+type StudyGroup = "control" | "intervention";
 type SchoolOption = { value: string; label: string };
 const OTHER_SCHOOL_VALUE = "__other__";
 
@@ -41,6 +42,7 @@ export default function AuthPage() {
     customSchoolName: "",
     classLevel: "5",
     childOrder: "",
+    studyGroup: "" as StudyGroup | "",
     employeeNumber: "",
     phone: "",
     fullTitle: "",
@@ -187,6 +189,12 @@ export default function AuthPage() {
     }
 
     if (role === "student") {
+      if (!formData.studyGroup) {
+        setErrorMsg("Pilih kelompok kontrol atau intervensi terlebih dahulu.");
+        setLoading(false);
+        return;
+      }
+
       if (!formData.schoolId) {
         setErrorMsg("Pilih sekolah terlebih dahulu.");
         setLoading(false);
@@ -296,6 +304,7 @@ export default function AuthPage() {
         school_id: resolvedSchoolId,
         class_level: Number(formData.classLevel) || null,
         child_order: parseInt(formData.childOrder, 10) || null,
+        study_group: formData.studyGroup,
       });
 
       if (studentProfileError) {
@@ -516,6 +525,21 @@ export default function AuthPage() {
                             value={formData.heightCm}
                             onChange={(event) => setFormData({ ...formData, heightCm: event.target.value })}
                           />
+                        </div>
+
+                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-2">
+                          <Select
+                            label="Kelompok Program"
+                            options={[
+                              { value: "intervention", label: "Intervensi — fitur lengkap" },
+                              { value: "control", label: "Kontrol — tanpa 5 video edukasi" },
+                            ]}
+                            value={formData.studyGroup}
+                            onChange={(event) => setFormData({ ...formData, studyGroup: event.target.value as StudyGroup })}
+                          />
+                          <p className="text-xs leading-5 text-indigo-700">
+                            Pilihan ini menentukan apakah menu lima video edukasi ditampilkan pada akun siswa.
+                          </p>
                         </div>
 
                         <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 space-y-4">

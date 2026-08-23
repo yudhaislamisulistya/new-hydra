@@ -224,6 +224,25 @@ CREATE TRIGGER protect_profile_role
 BEFORE UPDATE OF role ON public.profiles
 FOR EACH ROW EXECUTE FUNCTION public.protect_profile_role();
 
+CREATE OR REPLACE FUNCTION public.protect_student_study_group()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.study_group IS DISTINCT FROM OLD.study_group AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Only administrators can change a student study group' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS protect_student_study_group ON public.student_profiles;
+CREATE TRIGGER protect_student_study_group
+BEFORE UPDATE OF study_group ON public.student_profiles
+FOR EACH ROW EXECUTE FUNCTION public.protect_student_study_group();
+
 CREATE OR REPLACE FUNCTION public.protect_teacher_school()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -420,7 +439,18 @@ USING (EXISTS (
 
 CREATE POLICY education_materials_read_published
 ON public.education_materials FOR SELECT TO authenticated
-USING (is_published);
+USING (
+  is_published
+  AND (
+    public.current_user_role() IS DISTINCT FROM 'student'
+    OR EXISTS (
+      SELECT 1
+      FROM public.student_profiles
+      WHERE student_profiles.id = auth.uid()
+        AND student_profiles.study_group = 'intervention'
+    )
+  )
+);
 
 CREATE POLICY survey_responses_read_accessible
 ON public.survey_responses FOR SELECT TO authenticated

@@ -85,6 +85,7 @@ type HydrationLogItem = {
 
 export default function TrackerPage() {
   const { profile } = useUserStore();
+  const hasEducationAccess = profile?.study_group !== "control";
   const { addIntake, records } = useHydrationStore();
   const today = formatLocalDateKey(new Date());
 
@@ -423,7 +424,7 @@ export default function TrackerPage() {
         {/* Navigasi */}
         <div className="flex gap-3">
           <Link
-            href="/education"
+            href={hasEducationAccess ? "/education" : "/dashboard"}
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50"
           >
             <ArrowLeft size={18} />

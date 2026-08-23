@@ -320,6 +320,8 @@ CREATE TABLE IF NOT EXISTS "public"."student_profiles" (
     "school_id" "uuid",
     "class_level" integer,
     "child_order" integer,
+    "study_group" "text" DEFAULT 'intervention'::"text" NOT NULL,
+    CONSTRAINT "student_profiles_study_group_chk" CHECK (("study_group" = ANY (ARRAY['control'::"text", 'intervention'::"text"]))),
     CONSTRAINT "student_profiles_child_order_chk" CHECK ((("child_order" IS NULL) OR ("child_order" >= 1))),
     CONSTRAINT "student_profiles_class_level_chk" CHECK ((("class_level" IS NULL) OR ("class_level" = ANY (ARRAY[5, 6]))))
 );
