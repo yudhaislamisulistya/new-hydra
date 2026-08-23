@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 import { PlaySquare, Plus, Link as LinkIcon, Trash2, Edit, ClipboardList } from "lucide-react";
 
 // Helper to extract YouTube video ID from various YT URL formats

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Droplets } from "lucide-react";
-import { createClient } from "../utils/supabase/client";
+import { createClient } from "../utils/api/client";
 
 export default function SplashScreen() {
   const router = useRouter();

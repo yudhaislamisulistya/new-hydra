@@ -7,7 +7,7 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
 import { calculateBasicFluidNeeds } from "../../../utils/hydrationCalc";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, PARENT_EDUCATION_OPTIONS, PARENT_GENDER_OPTIONS } from "../../../utils/parentProfile";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 
 type UserRole = "student" | "parent" | "admin" | "teacher";
 type StudentGender = "male" | "female";
@@ -403,33 +403,10 @@ export default function AdminUsersPage() {
     const supabase = createClient();
 
     try {
-      const deleteRows = async (tableName: string, columnName: string) => {
-        const { error } = await supabase.from(tableName).delete().eq(columnName, user.id);
-        if (error) throw error;
-      };
-
-      if (user.role === "student") {
-        await deleteRows("child_notifications", "child_id");
-        await deleteRows("parent_children", "child_id");
-        await deleteRows("hydration_logs", "student_id");
-        await deleteRows("survey_responses", "student_id");
-        await deleteRows("student_profiles", "id");
-      }
-
-      if (user.role === "parent") {
-        await deleteRows("child_notifications", "parent_id");
-        await deleteRows("parent_children", "parent_id");
-        await deleteRows("parent_profiles", "id");
-      }
-
-      if (user.role === "teacher") {
-        await deleteRows("teacher_profiles", "id");
-      }
-
-      await deleteRows("survey_responses", "respondent_id");
-
-      const { error: profileError } = await supabase.from("profiles").delete().eq("id", user.id);
-      if (profileError) throw profileError;
+      const { error } = await supabase.rpc("admin_delete_user", {
+        user_id_input: user.id,
+      } as never);
+      if (error) throw error;
 
       setUsers((currentUsers) => currentUsers.filter((currentUser) => currentUser.id !== user.id));
     } catch (error) {

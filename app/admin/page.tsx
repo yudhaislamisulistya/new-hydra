@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AdminHeader } from "../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../components/ui/Card";
 import { Users, Droplets, ClipboardList, Activity } from "lucide-react";
-import { createClient } from "../../utils/supabase/client";
+import { createClient } from "../../utils/api/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { calculateRequiredIntake, formatLocalDateKey, normalizeGender } from "../../utils/hydrationCalc";
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 import { Activity, ArrowRight, Target, Scale } from "lucide-react";
 import Link from "next/link";
 import { calculateBasicFluidNeeds, calculateIntakeFromStoredBaseNeed, getGenderFactor } from "../../../utils/hydrationCalc";

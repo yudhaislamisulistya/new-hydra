@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 import { ArrowLeft, Plus, Trash2, Download, Users, ChevronDown, ChevronUp, Pencil, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";

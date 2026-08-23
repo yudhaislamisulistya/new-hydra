@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 import { XP_PER_SURVEY, XP_PER_HYDRATION_LOG } from "../../../utils/gamification";
 import { Trophy, Zap, Droplet, ClipboardList, Medal, Crown, ArrowLeft, Home } from "lucide-react";
 import Link from "next/link";
@@ -25,26 +25,15 @@ interface LeaderboardEntry {
   rank: number;
 }
 
-type StudentLeaderboardRow = {
+type LocalLeaderboardRow = {
   id: string;
-  profiles: {
-    full_name: string | null;
-  }[] | {
-    full_name: string | null;
-  } | null;
-};
-
-type SurveyResponseCountRow = {
-  respondent_id: string;
-};
-
-type HydrationLogCountRow = {
-  student_id: string;
-};
-
-type DailyCheckinXpRow = {
-  student_id: string;
-  xp_earned: number | null;
+  name: string;
+  survey_count: number;
+  hydration_count: number;
+  checkin_count: number;
+  checkin_xp: number;
+  total_xp: number;
+  rank: number;
 };
 
 export default function LeaderboardPage() {
@@ -57,86 +46,35 @@ export default function LeaderboardPage() {
   useEffect(() => {
     async function fetchLeaderboard() {
       const supabase = createClient();
+      const { data, error } = await supabase.rpc('get_leaderboard');
 
-      // 1. Get all students
-      const { data: students } = await supabase
-        .from('student_profiles')
-        .select('id, profiles!student_profiles_id_fkey(full_name)');
-
-      if (!students || students.length === 0) {
+      if (error) {
+        console.error('Error fetching leaderboard:', error);
+        setLeaderboard([]);
+        setMyRank(null);
         setLoading(false);
         return;
       }
 
-      // 2. Get all survey responses
-      const { data: surveyResponses } = await supabase
-        .from('survey_responses')
-        .select('respondent_id');
-
-      // 3. Get all hydration logs
-      const { data: hydrationLogs } = await supabase
-        .from('hydration_logs')
-        .select('student_id');
-
-      // 4. Get all daily check-ins
-      const { data: dailyCheckins } = await supabase
-        .from('daily_checkins')
-        .select('student_id, xp_earned');
-
-      // 5. Count per student
-      const surveyCounts: Record<string, number> = {};
-      ((surveyResponses as SurveyResponseCountRow[] | null) || []).forEach((r) => {
-        surveyCounts[r.respondent_id] = (surveyCounts[r.respondent_id] || 0) + 1;
-      });
-
-      const hydrationCounts: Record<string, number> = {};
-      ((hydrationLogs as HydrationLogCountRow[] | null) || []).forEach((l) => {
-        hydrationCounts[l.student_id] = (hydrationCounts[l.student_id] || 0) + 1;
-      });
-
-      const checkinCounts: Record<string, number> = {};
-      const checkinXpTotals: Record<string, number> = {};
-      ((dailyCheckins as DailyCheckinXpRow[] | null) || []).forEach((c) => {
-        checkinCounts[c.student_id] = (checkinCounts[c.student_id] || 0) + 1;
-        checkinXpTotals[c.student_id] = (checkinXpTotals[c.student_id] || 0) + (c.xp_earned || 0);
-      });
-
-      // 6. Build leaderboard
-      const entries: LeaderboardEntry[] = ((students as StudentLeaderboardRow[] | null) || []).map((s) => {
-        const rawProfile = s.profiles;
-        const profileRow = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
-        const surveyCount = surveyCounts[s.id] || 0;
-        const hydrationCount = hydrationCounts[s.id] || 0;
-        const checkinCount = checkinCounts[s.id] || 0;
-        const checkinXp = checkinXpTotals[s.id] || 0;
-        return {
-          id: s.id,
-          name: profileRow?.full_name || 'Siswa',
-          surveyCount,
-          hydrationCount,
-          checkinCount,
-          checkinXp,
-          totalXP: (surveyCount * XP_PER_SURVEY) + (hydrationCount * XP_PER_HYDRATION_LOG) + checkinXp,
-          rank: 0,
-        };
-      });
-
-      // 7. Sort by XP descending
-      entries.sort((a, b) => b.totalXP - a.totalXP);
-      entries.forEach((e, i) => { e.rank = i + 1; });
+      const entries: LeaderboardEntry[] = (
+        (data as LocalLeaderboardRow[] | null) || []
+      ).map((row) => ({
+        id: row.id,
+        name: row.name,
+        surveyCount: Number(row.survey_count),
+        hydrationCount: Number(row.hydration_count),
+        checkinCount: Number(row.checkin_count),
+        checkinXp: Number(row.checkin_xp),
+        totalXP: Number(row.total_xp),
+        rank: Number(row.rank),
+      }));
 
       setLeaderboard(entries);
-
-      // Find my rank
-      if (profile?.id) {
-        const me = entries.find(e => e.id === profile.id);
-        if (me) setMyRank(me);
-      }
-
+      setMyRank(profile?.id ? entries.find((entry) => entry.id === profile.id) || null : null);
       setLoading(false);
     }
 
-    fetchLeaderboard();
+    void fetchLeaderboard();
   }, [profile?.id]);
 
   const getRankIcon = (rank: number) => {

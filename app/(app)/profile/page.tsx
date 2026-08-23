@@ -8,7 +8,7 @@ import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { LogOut, User, ShieldCheck, Droplet, Crown, Zap, Lock, Palette, School2, Hash, GraduationCap, Edit3, Save, X, CalendarDays, Ruler } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 import { useEffect, useState } from "react";
 import { BUDDY_ACCESSORIES, BUDDY_COLORS, getBuddyAccessory, getBuddyColor } from "../../../utils/hydrationBuddy";
 import { normalizeUsername } from "../../../utils/authIdentity";

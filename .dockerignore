@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+out
+.env*
+android
+coverage
+database
+docs
+supabase
+sql
+*.log

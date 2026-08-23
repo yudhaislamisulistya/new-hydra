@@ -4,7 +4,7 @@ import { useUserStore } from "../../store/useUserStore";
 import { Bell, LogOut } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createClient } from "../../utils/supabase/client";
+import { createClient } from "../../utils/api/client";
 
 type NotificationCountRow = {
   id: string;

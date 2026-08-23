@@ -15,7 +15,7 @@ import {
   getAdequacyStatus,
   getHydrationPeriod,
 } from "../../../utils/hydrationInsights";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 
 const DRINK_VOLUMES = [100, 125, 150, 200, 250, 350, 500];
 const TRACKER_PERIOD_OPTIONS = [

@@ -8,7 +8,7 @@ import { ProgressBar } from "../../../components/ui/ProgressBar";
 import { CheckCircle2, ClipboardList, ArrowLeft, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useUserStore } from "../../../store/useUserStore";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 
 type QuizSummary = {
   id: string;

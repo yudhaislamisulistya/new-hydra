@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Droplets, Edit3, GraduationCap
 import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 import { buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
 
 type SchoolRecord = {

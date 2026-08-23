@@ -9,7 +9,7 @@ import { ProgressBar } from "../../../components/ui/ProgressBar";
 import { AlertCircle, ClipboardList, CheckCircle2, Copy, UserPlus, Trash2, Droplet, ChevronRight, Sparkles, ChevronDown, ChevronUp, Bell, GraduationCap, School2, Phone, IdCard, BriefcaseBusiness, Wallet, CalendarDays, MessageSquareText, SendHorizonal, Users, Zap, PlayCircle } from "lucide-react";
 import Link from "next/link";
 import { calculateRequiredIntake, formatLocalDateKey, type ActivityLevel, type Gender } from "../../../utils/hydrationCalc";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 import { getBuddyAccessory, getBuddyColor } from "../../../utils/hydrationBuddy";
 import { getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, getParentGenderLabel } from "../../../utils/parentProfile";
@@ -481,27 +481,22 @@ export default function DashboardPage() {
     setChildError('');
     const supabase = createClient();
     try {
-      // Find student by code
-      const { data: student, error: findErr } = await supabase
-        .from('student_profiles')
-        .select('id, student_code')
-        .eq('student_code', childCode.trim().toUpperCase())
-        .single();
-      if (findErr || !student) {
-        setChildError('Kode siswa tidak ditemukan.');
-        setAddingChild(false);
-        return;
-      }
-      // Link
       const { error: linkErr } = await supabase
-        .from('parent_children')
-        .insert({ parent_id: profile.id, child_id: student.id });
+        .rpc('link_child_by_code', {
+          student_code_input: childCode.trim().toUpperCase(),
+        } as never);
+
       if (linkErr) {
-        setChildError(linkErr.code === '23505' ? 'Anak sudah ditambahkan.' : linkErr.message);
+        const message = linkErr.code === '23505'
+          ? 'Anak sudah ditambahkan.'
+          : linkErr.code === 'P0002'
+            ? 'Kode siswa tidak ditemukan.'
+            : linkErr.message;
+        setChildError(message);
         setAddingChild(false);
         return;
       }
-      // Refresh
+
       setChildCode('');
       const { data } = await supabase
         .from('parent_children')

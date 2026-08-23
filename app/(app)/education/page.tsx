@@ -7,7 +7,7 @@ import { Button } from "../../../components/ui/Button";
 import { PlayCircle, Award, CheckCircle2, ArrowLeft, Droplet } from "lucide-react";
 import Link from "next/link";
 import { useUserStore } from "../../../store/useUserStore";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 
 type SurveyType = "survey" | "pengetahuan" | "sikap" | "kuis";
 

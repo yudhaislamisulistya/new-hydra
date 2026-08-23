@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { createClient } from "../utils/supabase/client";
+import { createClient } from "../utils/api/client";
 
 export type UserRole = "student" | "parent" | "admin" | "teacher" | null;
 

@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
-import { createClient } from "../../../utils/supabase/client";
+import { createClient } from "../../../utils/api/client";
 import { useRouter } from "next/navigation";
 import { formatLocalDateKey } from "../../../utils/hydrationCalc";
 import { 

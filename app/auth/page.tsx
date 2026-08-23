@@ -11,7 +11,7 @@ import { calculateBasicFluidNeeds } from "../../utils/hydrationCalc";
 import { buildSyntheticEmailFromUsername, normalizeUsername, resolveLoginIdentifier } from "../../utils/authIdentity";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, PARENT_EDUCATION_OPTIONS, PARENT_GENDER_OPTIONS } from "../../utils/parentProfile";
 import { formatSchoolName, normalizeSchoolNameKey } from "../../utils/schoolName";
-import { createClient } from "../../utils/supabase/client";
+import { createClient } from "../../utils/api/client";
 
 type Role = "student" | "parent" | "admin" | "teacher";
 type Gender = "male" | "female";
@@ -226,22 +226,6 @@ export default function AuthPage() {
       }
     }
 
-    const { data: existingUser, error: existingUserError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("username", normalizedUsername)
-      .maybeSingle();
-
-    if (existingUserError) {
-      console.error("Failed to validate username:", existingUserError);
-    }
-
-    if (existingUser) {
-      setErrorMsg("Username sudah dipakai. Silakan gunakan username lain.");
-      setLoading(false);
-      return;
-    }
-
     const parentIncomeAmount = Number(formData.parentIncomeAmount);
     const parentIncomeClassification = classifyParentIncome(parentIncomeAmount);
 
@@ -258,8 +242,11 @@ export default function AuthPage() {
     });
 
     if (authError) {
-      if (authError.message === "Database error saving new user") {
-        setErrorMsg("Registrasi gagal karena trigger database profil belum sinkron. Jalankan SQL perbaikan registrasi terlebih dahulu.");
+      if (
+        authError.message === "Database error saving new user"
+        || authError.message.toLowerCase().includes("already registered")
+      ) {
+        setErrorMsg("Username atau email sudah digunakan. Silakan gunakan username lain.");
       } else {
         setErrorMsg(authError.message);
       }
