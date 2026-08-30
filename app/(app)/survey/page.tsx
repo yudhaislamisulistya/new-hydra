@@ -46,8 +46,7 @@ function shuffleArray<T>(items: T[]) {
 const REQUIRED_DAILY_QUIZ_TYPES = new Set(["sikap", "pengetahuan"]);
 
 function isRequiredDailyQuiz(quiz: QuizSummary) {
-  const normalizedTitle = quiz.title.toLowerCase();
-  return REQUIRED_DAILY_QUIZ_TYPES.has(quiz.survey_type || "") && normalizedTitle.includes("dehidrasi");
+  return REQUIRED_DAILY_QUIZ_TYPES.has(quiz.survey_type || "");
 }
 
 export default function SurveyPage() {
