@@ -494,7 +494,8 @@ export default function TrackerPage() {
         {/* 4. Video Pesan Penting Keseimbangan Cairan Tubuh Kamu */}
         {profile?.role === "student" && (
           <>
-        <Card className={`border-2 ${adequacyStatus.isAdequate ? "border-emerald-100 bg-emerald-50/60" : "border-amber-100 bg-amber-50/60"}`}>
+        {hasEducationAccess && (
+          <Card className={`border-2 ${adequacyStatus.isAdequate ? "border-emerald-100 bg-emerald-50/60" : "border-amber-100 bg-amber-50/60"}`}>
           <CardContent className="p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -545,7 +546,8 @@ export default function TrackerPage() {
               Tonton Video Pesan Penting
             </Button>
           </CardContent>
-        </Card>
+          </Card>
+        )}
 
         {/* Navigasi */}
         <div className="flex gap-3">

@@ -44,7 +44,6 @@ export default function AuthPage() {
     childOrder: "",
     studyGroup: "" as StudyGroup | "",
     employeeNumber: "",
-    phone: "",
     fullTitle: "",
     parentEducation: "",
     parentOccupation: "",
@@ -319,7 +318,6 @@ export default function AuthPage() {
         employee_number: formData.employeeNumber.trim() || null,
         full_title: formData.fullTitle.trim() || null,
         gender: formData.gender,
-        phone: formData.phone.trim() || null,
       });
 
       if (teacherProfileError) {
@@ -532,13 +530,13 @@ export default function AuthPage() {
                             label="Kelompok Program"
                             options={[
                               { value: "intervention", label: "Intervensi — fitur lengkap" },
-                              { value: "control", label: "Kontrol — tanpa 5 video edukasi" },
+                              { value: "control", label: "Kontrol — bagian video disembunyikan" },
                             ]}
                             value={formData.studyGroup}
                             onChange={(event) => setFormData({ ...formData, studyGroup: event.target.value as StudyGroup })}
                           />
                           <p className="text-xs leading-5 text-indigo-700">
-                            Pilihan ini menentukan apakah menu lima video edukasi ditampilkan pada akun siswa.
+                            Pilihan ini menentukan apakah bagian video ditampilkan pada akun siswa.
                           </p>
                         </div>
 
@@ -600,24 +598,15 @@ export default function AuthPage() {
 
                     {role === "teacher" && (
                       <>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Select
-                            label="Jenis Kelamin"
-                            options={[
-                              { value: "male", label: "Laki-laki" },
-                              { value: "female", label: "Perempuan" },
-                            ]}
-                            value={formData.gender}
-                            onChange={(event) => setFormData({ ...formData, gender: event.target.value as Gender })}
-                          />
-                          <Input
-                            label="Nomor HP"
-                            type="tel"
-                            placeholder="Contoh: 08123456789"
-                            value={formData.phone}
-                            onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
-                          />
-                        </div>
+                        <Select
+                          label="Jenis Kelamin"
+                          options={[
+                            { value: "male", label: "Laki-laki" },
+                            { value: "female", label: "Perempuan" },
+                          ]}
+                          value={formData.gender}
+                          onChange={(event) => setFormData({ ...formData, gender: event.target.value as Gender })}
+                        />
 
                         <div className="grid grid-cols-2 gap-4">
                           <Input

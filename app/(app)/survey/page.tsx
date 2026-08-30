@@ -491,7 +491,7 @@ export default function SurveyPage() {
                       onClick={() => handleStartSurvey(survey)}
                       disabled={loadingQuiz}
                     >
-                      {loadingQuiz ? "Memuat..." : "Mulai Kuis"}
+                      {loadingQuiz ? "Memuat..." : "Mulai"}
                     </Button>
                   )}
                 </CardContent>

@@ -200,6 +200,9 @@ const normalizeTeacherStudents = (rows: TeacherStudentQueryRow[] | null): Teache
 export default function DashboardPage() {
   const { profile } = useUserStore();
   const hasEducationAccess = profile?.study_group !== "control";
+  const hydrationLogGuide = hasEducationAccess
+    ? "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lihat hasil dan jangan lupa tonton video pesan penting keseimbangan cairan tubuh kamu."
+    : "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lalu lihat hasil keseimbangan cairan tubuh kamu.";
   const today = formatLocalDateKey(new Date());
   const { records, fetchLogs } = useHydrationStore();
   // Aktivitas (FA) sekarang diisi di menu "Ayo Catat". Dashboard memakai default sedang untuk ringkasan.
@@ -1102,7 +1105,7 @@ export default function DashboardPage() {
                   }] : []),
                   {
                     title: "Ayo Catat",
-                    detail: "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lihat hasil dan jangan lupa tonton video pesan penting keseimbangan cairan tubuh kamu.",
+                    detail: hydrationLogGuide,
                     accent: "bg-cyan-50 border-cyan-200 text-cyan-700",
                   },
                   {
@@ -1219,7 +1222,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Video sederhana penggunaan aplikasi */}
-            {getUsageVideoId(USAGE_VIDEO_URLS.student) ? (
+            {hasEducationAccess && (getUsageVideoId(USAGE_VIDEO_URLS.student) ? (
               <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-900">
                 <div className="aspect-video w-full">
                   <iframe
@@ -1236,12 +1239,12 @@ export default function DashboardPage() {
                 <PlayCircle size={32} className="text-slate-300" />
                 <p className="text-xs font-semibold text-slate-500">Video panduan penggunaan aplikasi segera hadir.</p>
               </div>
-            )}
+            ))}
 
             <div className="space-y-2">
               {[
                 ...(hasEducationAccess ? [{ title: "Ayo Belajar", detail: "Ayo tonton 5 video pembelajaran tentang pentingnya keseimbangan cairan bagi tubuh kamu." }] : []),
-                { title: "Ayo Catat", detail: "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lihat hasil keseimbangan cairan tubuh kamu serta jangan lupa tonton video pesan penting keseimbangan cairan tubuh kamu." },
+                { title: "Ayo Catat", detail: hydrationLogGuide },
                 { title: "Ayo Jawab", detail: "Ayo isi pengetahuan dan sikap tentang keseimbangan cairan tubuh." },
                 { title: "Papan Peringkat", detail: "Ayo lihat peringkat keseimbangan cairan kamu hari ini." },
               ].map((step, index) => (
