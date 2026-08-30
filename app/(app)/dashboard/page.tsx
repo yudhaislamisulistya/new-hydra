@@ -6,7 +6,7 @@ import { useHydrationStore } from "../../../store/useHydrationStore";
 import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { ProgressBar } from "../../../components/ui/ProgressBar";
-import { AlertCircle, ClipboardList, CheckCircle2, Copy, UserPlus, Trash2, Droplet, ChevronRight, Sparkles, ChevronDown, ChevronUp, Bell, GraduationCap, School2, Phone, IdCard, BriefcaseBusiness, Wallet, CalendarDays, MessageSquareText, SendHorizonal, Users, Zap, PlayCircle } from "lucide-react";
+import { AlertCircle, ClipboardList, CheckCircle2, Copy, UserPlus, Trash2, Droplet, ChevronRight, Sparkles, ChevronDown, ChevronUp, Bell, GraduationCap, School2, IdCard, BriefcaseBusiness, Wallet, CalendarDays, MessageSquareText, SendHorizonal, Users, Zap, PlayCircle } from "lucide-react";
 import Link from "next/link";
 import { calculateRequiredIntake, formatLocalDateKey, type ActivityLevel, type Gender } from "../../../utils/hydrationCalc";
 import { createClient } from "../../../utils/api/client";
@@ -697,19 +697,13 @@ export default function DashboardPage() {
               </span>
               <span className="min-w-0 break-words text-right text-sm font-bold text-slate-800">{profile.employee_number || "Belum diatur"}</span>
             </div>
-            <div className="flex items-center justify-between gap-4 px-5 py-4">
-              <span className="flex shrink-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-                <Phone size={16} className="text-sky-500" /> Nomor HP
-              </span>
-              <span className="min-w-0 break-words text-right text-sm font-bold text-slate-800">{profile.phone || "Belum diatur"}</span>
-            </div>
           </div>
 
           <Card className="border border-violet-100 bg-violet-50/60">
             <CardContent className="p-5">
               <p className="text-sm font-bold text-violet-800">Info Akun Guru</p>
               <p className="mt-2 text-sm text-slate-600">
-                Pendaftaran akun guru sudah aktif. Data guru sekarang tersimpan dengan sekolah, nomor induk, jenis kelamin, dan nomor HP, serta muncul di dashboard admin dan daftar user.
+                Pendaftaran akun guru sudah aktif. Data guru sekarang tersimpan dengan sekolah, nomor induk, jenis kelamin, dan jabatan atau gelar, serta muncul di dashboard admin dan daftar user.
               </p>
               <p className="mt-2 text-xs text-slate-500">
                 Jabatan / gelar: <span className="font-semibold text-slate-700">{profile.full_title || "Belum diatur"}</span>
