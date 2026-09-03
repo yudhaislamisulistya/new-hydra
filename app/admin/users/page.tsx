@@ -101,7 +101,9 @@ function toNullableNumber(value: string) {
 export default function AdminUsersPage() {
   const { profile: currentProfile } = useUserStore();
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [filterRole, setFilterRole] = useState<"all" | UserRole>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -166,8 +168,12 @@ export default function AdminUsersPage() {
 
     async function fetchUsers() {
       const supabase = createClient();
+      const rangeStart = (currentPage - 1) * USERS_PER_PAGE;
 
       try {
+        setLoading(true);
+        setFetchError(null);
+
         let query = supabase
           .from("profiles")
           .select(`
@@ -176,14 +182,15 @@ export default function AdminUsersPage() {
             full_name,
             email,
             created_at
-          `)
-          .order("created_at", { ascending: false });
+          `, { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(rangeStart, rangeStart + USERS_PER_PAGE - 1);
 
         if (filterRole !== "all") {
           query = query.eq("role", filterRole);
         }
 
-        const { data: profilesData, error: profilesError } = await query;
+        const { data: profilesData, error: profilesError, count } = await query;
         if (profilesError) throw profilesError;
 
         const typedProfiles = (profilesData || []) as AdminUser[];
@@ -241,9 +248,17 @@ export default function AdminUsersPage() {
           parent_profiles: parentMap[profile.id] || null,
         }));
 
-        if (isActive) setUsers(merged);
+        if (isActive) {
+          setUsers(merged);
+          setTotalUsers(count ?? merged.length);
+        }
       } catch (error) {
         console.error("Error fetching users:", error);
+        if (isActive) {
+          setUsers([]);
+          setTotalUsers(0);
+          setFetchError("Daftar pengguna gagal dimuat. Silakan coba lagi.");
+        }
       } finally {
         if (isActive) setLoading(false);
       }
@@ -254,7 +269,7 @@ export default function AdminUsersPage() {
     return () => {
       isActive = false;
     };
-  }, [filterRole, refreshToken]);
+  }, [currentPage, filterRole, refreshToken]);
 
   const refreshUsers = () => {
     setLoading(true);
@@ -267,9 +282,8 @@ export default function AdminUsersPage() {
     setCurrentPage(1);
   };
 
-  const totalPages = Math.max(1, Math.ceil(users.length / USERS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(totalUsers / USERS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
-  const paginatedUsers = users.slice((safePage - 1) * USERS_PER_PAGE, safePage * USERS_PER_PAGE);
 
   const handleOpenEdit = (user: AdminUser) => {
     const weight = user.student_profiles?.weight_kg;
@@ -408,7 +422,11 @@ export default function AdminUsersPage() {
       } as never);
       if (error) throw error;
 
-      setUsers((currentUsers) => currentUsers.filter((currentUser) => currentUser.id !== user.id));
+      if (users.length === 1 && currentPage > 1) {
+        setCurrentPage((page) => page - 1);
+      } else {
+        refreshUsers();
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Terjadi kesalahan saat menghapus pengguna.";
       alert(`Gagal menghapus pengguna: ${message}`);
@@ -457,6 +475,12 @@ export default function AdminUsersPage() {
                         Memuat data pengguna...
                       </td>
                     </tr>
+                  ) : fetchError ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-red-500">
+                        {fetchError}
+                      </td>
+                    </tr>
                   ) : users.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
@@ -464,7 +488,7 @@ export default function AdminUsersPage() {
                       </td>
                     </tr>
                   ) : (
-                    paginatedUsers.map((user) => (
+                    users.map((user) => (
                       <tr key={user.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap">
                           {user.full_name || "-"}
@@ -533,9 +557,9 @@ export default function AdminUsersPage() {
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-xl flex flex-col sm:flex-row gap-3 justify-between items-center text-sm text-slate-500">
               <span>
-                {users.length === 0
+                {totalUsers === 0
                   ? "Tidak ada pengguna"
-                  : `Menampilkan ${(safePage - 1) * USERS_PER_PAGE + 1}–${Math.min(safePage * USERS_PER_PAGE, users.length)} dari ${users.length} pengguna`}
+                  : `Menampilkan ${(safePage - 1) * USERS_PER_PAGE + 1}–${Math.min(safePage * USERS_PER_PAGE, totalUsers)} dari ${totalUsers} pengguna`}
               </span>
               {totalPages > 1 && (
                 <div className="flex items-center gap-2">
