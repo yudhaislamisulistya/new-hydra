@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Edit3, Loader2, Save, Trash2, X } from "lucide-react";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
-import { useUserStore } from "../../../store/useUserStore";
+import { useUserStore, type StudyGroup } from "../../../store/useUserStore";
 import { calculateBasicFluidNeeds } from "../../../utils/hydrationCalc";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, PARENT_EDUCATION_OPTIONS, PARENT_GENDER_OPTIONS } from "../../../utils/parentProfile";
 import { createClient } from "../../../utils/api/client";
@@ -21,6 +21,7 @@ type StudentProfile = {
   height_cm: number | null;
   daily_water_target_ml: number | null;
   student_code?: string | null;
+  study_group: StudyGroup;
 };
 
 type TeacherProfile = {
@@ -105,6 +106,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [filterRole, setFilterRole] = useState<"all" | UserRole>("all");
+  const [filterStudyGroup, setFilterStudyGroup] = useState<"all" | StudyGroup>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [refreshToken, setRefreshToken] = useState(0);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -169,6 +171,23 @@ export default function AdminUsersPage() {
     async function fetchUsers() {
       const supabase = createClient();
       const rangeStart = (currentPage - 1) * USERS_PER_PAGE;
+      const isStudyGroupFiltered = filterRole === "student" && filterStudyGroup !== "all";
+      const profileSelection: string = isStudyGroupFiltered
+        ? `
+            id,
+            role,
+            full_name,
+            email,
+            created_at,
+            student_profiles!student_profiles_id_fkey(id)
+          `
+        : `
+            id,
+            role,
+            full_name,
+            email,
+            created_at
+          `;
 
       try {
         setLoading(true);
@@ -176,13 +195,7 @@ export default function AdminUsersPage() {
 
         let query = supabase
           .from("profiles")
-          .select(`
-            id,
-            role,
-            full_name,
-            email,
-            created_at
-          `, { count: "exact" })
+          .select(profileSelection, { count: "exact" })
           .order("created_at", { ascending: false })
           .range(rangeStart, rangeStart + USERS_PER_PAGE - 1);
 
@@ -190,10 +203,16 @@ export default function AdminUsersPage() {
           query = query.eq("role", filterRole);
         }
 
+        if (isStudyGroupFiltered) {
+          query = query
+            .eq("student_profiles.study_group", filterStudyGroup)
+            .not("student_profiles", "is", null);
+        }
+
         const { data: profilesData, error: profilesError, count } = await query;
         if (profilesError) throw profilesError;
 
-        const typedProfiles = (profilesData || []) as AdminUser[];
+        const typedProfiles = (profilesData || []) as unknown as AdminUser[];
         const studentIds = typedProfiles.filter((profile) => profile.role === "student").map((profile) => profile.id);
         const teacherIds = typedProfiles.filter((profile) => profile.role === "teacher").map((profile) => profile.id);
         const parentIds = typedProfiles.filter((profile) => profile.role === "parent").map((profile) => profile.id);
@@ -269,7 +288,7 @@ export default function AdminUsersPage() {
     return () => {
       isActive = false;
     };
-  }, [currentPage, filterRole, refreshToken]);
+  }, [currentPage, filterRole, filterStudyGroup, refreshToken]);
 
   const refreshUsers = () => {
     setLoading(true);
@@ -279,6 +298,13 @@ export default function AdminUsersPage() {
   const handleFilterChange = (nextRole: "all" | UserRole) => {
     setLoading(true);
     setFilterRole(nextRole);
+    setFilterStudyGroup("all");
+    setCurrentPage(1);
+  };
+
+  const handleStudyGroupFilterChange = (nextGroup: "all" | StudyGroup) => {
+    setLoading(true);
+    setFilterStudyGroup(nextGroup);
     setCurrentPage(1);
   };
 
@@ -442,19 +468,34 @@ export default function AdminUsersPage() {
       <div className="p-8">
         <Card className="border-0 shadow-md">
           <CardContent className="p-0">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-xl">
+            <div className="p-6 border-b border-slate-100 flex flex-col gap-4 bg-white rounded-t-xl sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-bold text-slate-800">Daftar Pengguna</h2>
-              <select
-                className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
-                value={filterRole}
-                onChange={(event) => handleFilterChange(event.target.value as "all" | UserRole)}
-              >
-                <option value="all">Semua Role</option>
-                <option value="student">Anak / Siswa</option>
-                <option value="parent">Orang Tua</option>
-                <option value="teacher">Guru</option>
-                <option value="admin">Admin</option>
-              </select>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  aria-label="Filter role pengguna"
+                  className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
+                  value={filterRole}
+                  onChange={(event) => handleFilterChange(event.target.value as "all" | UserRole)}
+                >
+                  <option value="all">Semua Role</option>
+                  <option value="student">Anak / Siswa</option>
+                  <option value="parent">Orang Tua</option>
+                  <option value="teacher">Guru</option>
+                  <option value="admin">Admin</option>
+                </select>
+                {filterRole === "student" && (
+                  <select
+                    aria-label="Filter kelompok program siswa"
+                    className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
+                    value={filterStudyGroup}
+                    onChange={(event) => handleStudyGroupFilterChange(event.target.value as "all" | StudyGroup)}
+                  >
+                    <option value="all">Semua Kelompok</option>
+                    <option value="control">Kelompok Kontrol</option>
+                    <option value="intervention">Kelompok Intervensi</option>
+                  </select>
+                )}
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -464,6 +505,7 @@ export default function AdminUsersPage() {
                     <th scope="col" className="px-6 py-4">Nama Lengkap</th>
                     <th scope="col" className="px-6 py-4">Email</th>
                     <th scope="col" className="px-6 py-4">Role</th>
+                    <th scope="col" className="px-6 py-4">Kelompok Program</th>
                     <th scope="col" className="px-6 py-4">Detail Tambahan</th>
                     <th scope="col" className="px-6 py-4 text-right">Aksi</th>
                   </tr>
@@ -471,19 +513,19 @@ export default function AdminUsersPage() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                      <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
                         Memuat data pengguna...
                       </td>
                     </tr>
                   ) : fetchError ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-red-500">
+                      <td colSpan={6} className="px-6 py-8 text-center text-red-500">
                         {fetchError}
                       </td>
                     </tr>
                   ) : users.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                      <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
                         Tidak ada pengguna ditemukan.
                       </td>
                     </tr>
@@ -505,6 +547,19 @@ export default function AdminUsersPage() {
                           }`}>
                             {roleLabels[user.role]}
                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.role === "student" && user.student_profiles ? (
+                            <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
+                              user.student_profiles.study_group === "control"
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            }`}>
+                              {user.student_profiles.study_group === "control" ? "Kontrol" : "Intervensi"}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           {user.role === "student" && user.student_profiles ? (
