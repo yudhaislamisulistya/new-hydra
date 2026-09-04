@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Edit3, Loader2, Save, Trash2, X } from "lucide-react";
+import { Edit3, GraduationCap, Loader2, Save, School, Trash2, UserRound, X } from "lucide-react";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore, type StudyGroup } from "../../../store/useUserStore";
@@ -12,6 +12,7 @@ import { createClient } from "../../../utils/api/client";
 type UserRole = "student" | "parent" | "admin" | "teacher";
 type StudentGender = "male" | "female";
 type SchoolOption = { value: string; label: string };
+type SchoolRelation = { name: string | null } | { name: string | null }[] | null;
 
 type StudentProfile = {
   id: string;
@@ -22,6 +23,8 @@ type StudentProfile = {
   daily_water_target_ml: number | null;
   student_code?: string | null;
   study_group: StudyGroup;
+  class_level: number | null;
+  schools?: SchoolRelation;
 };
 
 type TeacherProfile = {
@@ -31,11 +34,7 @@ type TeacherProfile = {
   full_title: string | null;
   gender: StudentGender | null;
   phone: string | null;
-  schools?: {
-    name: string | null;
-  } | {
-    name: string | null;
-  }[] | null;
+  schools?: SchoolRelation;
 };
 
 type ParentProfile = {
@@ -224,7 +223,7 @@ export default function AdminUsersPage() {
         if (studentIds.length > 0) {
           const { data: studentData, error: studentError } = await supabase
             .from("student_profiles")
-            .select("*")
+            .select("*, schools(name)")
             .in("id", studentIds);
 
           if (studentError) throw studentError;
@@ -550,13 +549,29 @@ export default function AdminUsersPage() {
                         </td>
                         <td className="px-6 py-4">
                           {user.role === "student" && user.student_profiles ? (
-                            <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium ${
-                              user.student_profiles.study_group === "control"
-                                ? "border-amber-200 bg-amber-50 text-amber-700"
-                                : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            }`}>
-                              {user.student_profiles.study_group === "control" ? "Kontrol" : "Intervensi"}
-                            </span>
+                            <div className="space-y-2 text-xs">
+                              <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 font-medium ${
+                                user.student_profiles.study_group === "control"
+                                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              }`}>
+                                {user.student_profiles.study_group === "control" ? "Kontrol" : "Intervensi"}
+                              </span>
+                              <div className="space-y-1.5 text-slate-600">
+                                <div className="flex items-start gap-1.5">
+                                  <School aria-hidden="true" className="mt-0.5 shrink-0 text-slate-400" size={14} />
+                                  <span>{Array.isArray(user.student_profiles.schools) ? user.student_profiles.schools[0]?.name || "Sekolah belum diisi" : user.student_profiles.schools?.name || "Sekolah belum diisi"}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <GraduationCap aria-hidden="true" className="shrink-0 text-slate-400" size={14} />
+                                  <span>{user.student_profiles.class_level ? `Kelas ${user.student_profiles.class_level}` : "Kelas belum diisi"}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <UserRound aria-hidden="true" className="shrink-0 text-slate-400" size={14} />
+                                  <span>{user.student_profiles.gender === "male" ? "Laki-laki" : user.student_profiles.gender === "female" ? "Perempuan" : "Jenis kelamin belum diisi"}</span>
+                                </div>
+                              </div>
+                            </div>
                           ) : (
                             <span className="text-slate-300">-</span>
                           )}
