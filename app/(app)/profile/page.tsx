@@ -50,6 +50,7 @@ export default function ProfilePage() {
     schoolId: "",
     classLevel: "",
     childOrder: "",
+    studyGroup: "intervention",
   });
   const [isEditingParent, setIsEditingParent] = useState(false);
   const [isSavingParent, setIsSavingParent] = useState(false);
@@ -147,6 +148,7 @@ export default function ProfilePage() {
         schoolId: profile.school_id || "",
         classLevel: profile.class_level ? String(profile.class_level) : "",
         childOrder: profile.child_order ? String(profile.child_order) : "",
+        studyGroup: profile.study_group === "control" ? "control" : "intervention",
       });
     }, 0);
 
@@ -191,6 +193,7 @@ export default function ProfilePage() {
       schoolId: profile.school_id || "",
       classLevel: profile.class_level ? String(profile.class_level) : "",
       childOrder: profile.child_order ? String(profile.child_order) : "",
+      studyGroup: profile.study_group === "control" ? "control" : "intervention",
     });
   };
 
@@ -263,6 +266,7 @@ export default function ProfilePage() {
           school_id: studentForm.schoolId || null,
           class_level: classLevel,
           child_order: childOrder,
+          study_group: studentForm.studyGroup,
           daily_water_target_ml: calculateBasicFluidNeeds(weightKg),
           updated_at: new Date().toISOString(),
         })
@@ -658,7 +662,7 @@ export default function ProfilePage() {
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">Data Siswa</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Klik Edit Profil untuk memperbarui data. Username, kode siswa, program, dan target air dasar tetap dikunci.
+                    Klik Edit Profil untuk memperbarui data. Username, kode siswa, dan target air dasar tetap dikunci.
                   </p>
                 </div>
                 {!isEditingStudent ? (
@@ -725,10 +729,14 @@ export default function ProfilePage() {
                   value={profile?.student_code || ""}
                   disabled
                 />
-                <Input
+                <Select
                   label="Program"
-                  value={profile?.study_group === "control" ? "Program Kontrol" : profile?.study_group === "intervention" ? "Program Intervensi" : "Belum ditentukan"}
-                  disabled
+                  value={studentForm.studyGroup}
+                  onChange={(event) => setStudentForm((current) => ({ ...current, studyGroup: event.target.value }))}
+                  options={[
+                    { value: "control", label: "Program Kontrol" },
+                    { value: "intervention", label: "Program Intervensi" },
+                  ]}
                 />
                 <Input
                   label="Tanggal Lahir"
