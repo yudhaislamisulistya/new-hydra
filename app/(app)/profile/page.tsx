@@ -658,7 +658,7 @@ export default function ProfilePage() {
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">Data Siswa</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Username dan kode siswa dikunci. Data lain bisa diperbarui bila ada perubahan.
+                    Username, kode siswa, dan program dikunci. Data lain bisa diperbarui bila ada perubahan.
                   </p>
                 </div>
                 {!isEditingStudent ? (
@@ -724,6 +724,11 @@ export default function ProfilePage() {
                 <Input
                   label="Kode Siswa"
                   value={profile?.student_code || ""}
+                  disabled
+                />
+                <Input
+                  label="Program"
+                  value={profile?.study_group === "control" ? "Program Kontrol" : profile?.study_group === "intervention" ? "Program Intervensi" : "Belum ditentukan"}
                   disabled
                 />
                 <Input
