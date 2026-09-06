@@ -37,6 +37,7 @@ export default function ProfilePage() {
   const [avatarAccessory, setAvatarAccessory] = useState('none');
   const [activeTab, setActiveTab] = useState<'color' | 'accessory'>('color');
   const [schools, setSchools] = useState<SchoolOption[]>([]);
+  const [isEditingStudent, setIsEditingStudent] = useState(false);
   const [isSavingStudent, setIsSavingStudent] = useState(false);
   const [studentError, setStudentError] = useState("");
   const [studentSuccess, setStudentSuccess] = useState("");
@@ -180,6 +181,7 @@ export default function ProfilePage() {
 
     setStudentError("");
     setStudentSuccess("");
+    setIsEditingStudent(false);
     setStudentForm({
       fullName: profile.nickname || "",
       birthDate: profile.birth_date || "",
@@ -270,6 +272,7 @@ export default function ProfilePage() {
 
       await fetchProfile();
       setStudentSuccess("Profil siswa berhasil diperbarui.");
+      setIsEditingStudent(false);
     } catch (error) {
       setStudentError(error instanceof Error ? error.message : "Gagal menyimpan profil siswa.");
     } finally {
@@ -655,28 +658,43 @@ export default function ProfilePage() {
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">Data Siswa</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Username, kode siswa, program, dan target air dasar dikunci. Data lainnya dapat langsung diperbarui.
+                    Klik Edit Profil untuk memperbarui data. Username, kode siswa, program, dan target air dasar tetap dikunci.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                {!isEditingStudent ? (
                   <button
                     type="button"
-                    onClick={handleCancelStudentEdit}
-                    className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                    onClick={() => {
+                      setStudentError("");
+                      setStudentSuccess("");
+                      setIsEditingStudent(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 transition-colors"
                   >
-                    <X size={14} />
-                    Batal
+                    <Edit3 size={14} />
+                    Edit Profil
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveStudentProfile}
-                    disabled={isSavingStudent}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
-                  >
-                    <Save size={14} />
-                    {isSavingStudent ? "Menyimpan..." : "Simpan"}
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCancelStudentEdit}
+                      className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+                    >
+                      <X size={14} />
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveStudentProfile}
+                      disabled={isSavingStudent}
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
+                    >
+                      <Save size={14} />
+                      {isSavingStudent ? "Menyimpan..." : "Simpan"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {studentError && (
@@ -691,7 +709,7 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <fieldset disabled={!isEditingStudent} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Input
                   label="Nama Lengkap"
                   value={studentForm.fullName}
@@ -770,7 +788,7 @@ export default function ProfilePage() {
                   value={`${calculateBasicFluidNeeds(Number(studentForm.weightKg) || profile?.weight_kg || 0)} ml`}
                   disabled
                 />
-              </div>
+              </fieldset>
             </CardContent>
           </Card>
 
