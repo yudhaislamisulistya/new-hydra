@@ -37,7 +37,6 @@ export default function ProfilePage() {
   const [avatarAccessory, setAvatarAccessory] = useState('none');
   const [activeTab, setActiveTab] = useState<'color' | 'accessory'>('color');
   const [schools, setSchools] = useState<SchoolOption[]>([]);
-  const [isEditingStudent, setIsEditingStudent] = useState(false);
   const [isSavingStudent, setIsSavingStudent] = useState(false);
   const [studentError, setStudentError] = useState("");
   const [studentSuccess, setStudentSuccess] = useState("");
@@ -181,7 +180,6 @@ export default function ProfilePage() {
 
     setStudentError("");
     setStudentSuccess("");
-    setIsEditingStudent(false);
     setStudentForm({
       fullName: profile.nickname || "",
       birthDate: profile.birth_date || "",
@@ -272,7 +270,6 @@ export default function ProfilePage() {
 
       await fetchProfile();
       setStudentSuccess("Profil siswa berhasil diperbarui.");
-      setIsEditingStudent(false);
     } catch (error) {
       setStudentError(error instanceof Error ? error.message : "Gagal menyimpan profil siswa.");
     } finally {
@@ -658,43 +655,28 @@ export default function ProfilePage() {
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">Data Siswa</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Username, kode siswa, dan program dikunci. Data lain bisa diperbarui bila ada perubahan.
+                    Username, kode siswa, program, dan target air dasar dikunci. Data lainnya dapat langsung diperbarui.
                   </p>
                 </div>
-                {!isEditingStudent ? (
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setStudentError("");
-                      setStudentSuccess("");
-                      setIsEditingStudent(true);
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 transition-colors"
+                    onClick={handleCancelStudentEdit}
+                    className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors"
                   >
-                    <Edit3 size={14} />
-                    Edit Profil
+                    <X size={14} />
+                    Batal
                   </button>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCancelStudentEdit}
-                      className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors"
-                    >
-                      <X size={14} />
-                      Batal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveStudentProfile}
-                      disabled={isSavingStudent}
-                      className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
-                    >
-                      <Save size={14} />
-                      {isSavingStudent ? "Menyimpan..." : "Simpan"}
-                    </button>
-                  </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={handleSaveStudentProfile}
+                    disabled={isSavingStudent}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
+                  >
+                    <Save size={14} />
+                    {isSavingStudent ? "Menyimpan..." : "Simpan"}
+                  </button>
+                </div>
               </div>
 
               {studentError && (
@@ -714,7 +696,6 @@ export default function ProfilePage() {
                   label="Nama Lengkap"
                   value={studentForm.fullName}
                   onChange={(event) => setStudentForm((current) => ({ ...current, fullName: event.target.value }))}
-                  disabled={!isEditingStudent}
                 />
                 <Input
                   label="Username"
@@ -736,13 +717,11 @@ export default function ProfilePage() {
                   type="date"
                   value={studentForm.birthDate}
                   onChange={(event) => setStudentForm((current) => ({ ...current, birthDate: event.target.value }))}
-                  disabled={!isEditingStudent}
                 />
                 <Select
                   label="Jenis Kelamin"
                   value={studentForm.gender}
                   onChange={(event) => setStudentForm((current) => ({ ...current, gender: event.target.value }))}
-                  disabled={!isEditingStudent}
                   options={[
                     { value: "male", label: "Laki-laki" },
                     { value: "female", label: "Perempuan" },
@@ -752,14 +731,12 @@ export default function ProfilePage() {
                   label="Sekolah"
                   value={studentForm.schoolId}
                   onChange={(event) => setStudentForm((current) => ({ ...current, schoolId: event.target.value }))}
-                  disabled={!isEditingStudent}
                   options={schools.map((school) => ({ value: school.id, label: school.name }))}
                 />
                 <Select
                   label="Kelas"
                   value={studentForm.classLevel}
                   onChange={(event) => setStudentForm((current) => ({ ...current, classLevel: event.target.value }))}
-                  disabled={!isEditingStudent}
                   options={[
                     { value: "5", label: "Kelas 5" },
                     { value: "6", label: "Kelas 6" },
@@ -771,7 +748,6 @@ export default function ProfilePage() {
                   min="1"
                   value={studentForm.childOrder}
                   onChange={(event) => setStudentForm((current) => ({ ...current, childOrder: event.target.value }))}
-                  disabled={!isEditingStudent}
                 />
                 <Input
                   label="Berat Badan (kg)"
@@ -780,7 +756,6 @@ export default function ProfilePage() {
                   step="0.1"
                   value={studentForm.weightKg}
                   onChange={(event) => setStudentForm((current) => ({ ...current, weightKg: event.target.value }))}
-                  disabled={!isEditingStudent}
                 />
                 <Input
                   label="Tinggi Badan (cm)"
@@ -789,7 +764,6 @@ export default function ProfilePage() {
                   step="0.1"
                   value={studentForm.heightCm}
                   onChange={(event) => setStudentForm((current) => ({ ...current, heightCm: event.target.value }))}
-                  disabled={!isEditingStudent}
                 />
                 <Input
                   label="Target Air Dasar"
