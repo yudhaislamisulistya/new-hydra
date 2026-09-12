@@ -9,6 +9,7 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
 import { useUserStore } from "../../../store/useUserStore";
+import { useAppStore } from "../../../store/useAppStore";
 import { useHydrationStore } from "../../../store/useHydrationStore";
 import { calculateRequiredIntake, formatLocalDateKey, type ActivityLevel, type Gender } from "../../../utils/hydrationCalc";
 import {
@@ -116,6 +117,7 @@ const normalizeAccessibleStudents = (rows: AccessibleStudentQueryRow[] | null): 
 
 export default function TrackerPage() {
   const { profile } = useUserStore();
+  const { selectedDate, setSelectedDate } = useAppStore();
   const hasEducationAccess = profile?.study_group !== "control";
   const { addIntake } = useHydrationStore();
   const today = formatLocalDateKey(new Date());
@@ -123,7 +125,6 @@ export default function TrackerPage() {
   const [students, setStudents] = useState<AccessibleStudent[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [loadingStudents, setLoadingStudents] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(today);
   const [selectedPeriod, setSelectedPeriod] = useState<string>(getHydrationPeriod(new Date()));
   const [drinkType, setDrinkType] = useState("Air putih/air matang");
   const [volume, setVolume] = useState<number>(250);
@@ -559,7 +560,7 @@ export default function TrackerPage() {
             Kembali
           </Link>
           <Link
-            href="/survey"
+            href={`/survey?date=${selectedDate}`}
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700"
           >
             <CheckCircle2 size={18} />

@@ -8,6 +8,7 @@ import { createClient } from "../../../utils/api/client";
 import { ArrowLeft, Plus, Trash2, Download, Users, ChevronDown, ChevronUp, Pencil, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { getUserRoleLabel } from "../../../utils/authIdentity";
 
 type QuizSurvey = {
   id: string;
@@ -122,7 +123,7 @@ function ManageQuizContent() {
         // Fetch responses for this survey
         const { data: responsesData, error: responsesError } = await supabase
           .from('survey_responses')
-          .select('id, respondent_id, student_id, submitted_at, answers')
+          .select('id, respondent_id, student_id, submitted_at, response_date, answers')
           .eq('survey_id', surveyId)
           .order('submitted_at', { ascending: false });
 
@@ -342,7 +343,7 @@ function ManageQuizContent() {
 
     const questionHeaders = questions.map((q, i) => `Pertanyaan ${i + 1}: ${q.question_text}`);
     const scoreHeaders = isScoredExport ? ['Skor', 'Skor Maks', 'Persentase (%)', 'Kesimpulan'] : [];
-    const headers = ['No', 'Nama Responden', 'Email', 'Waktu Pengisian', ...questionHeaders, ...scoreHeaders];
+    const headers = ['No', 'Nama Responden', 'Email', 'Tanggal Catatan Asupan', 'Waktu Pengisian', ...questionHeaders, ...scoreHeaders];
 
     const rows = responses.map((r, idx) => {
       const date = new Date(r.submitted_at);
@@ -364,6 +365,7 @@ function ManageQuizContent() {
         idx + 1,
         `"${r.respondent_name}"`,
         `"${r.respondent_email}"`,
+        `"${new Date(`${r.response_date}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}"`,
         `"${date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}"`,
         ...answerCols,
         ...scoreCols,
@@ -414,7 +416,7 @@ function ManageQuizContent() {
                   {survey.is_active ? 'Status: Aktif' : 'Status: Draft'}
                 </span>
                 <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
-                  Target: {survey.target_role}
+                  Target: {getUserRoleLabel(survey.target_role)}
                 </span>
                 <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                   survey.survey_type === 'pengetahuan' ? 'bg-purple-100 text-purple-700' :
@@ -591,6 +593,7 @@ function ManageQuizContent() {
             <div className="space-y-3">
               {responses.map((r, idx) => {
                 const date = new Date(r.submitted_at);
+                const responseDate = new Date(`${r.response_date}T00:00:00`);
                 const isExpanded = expandedId === r.id;
 
                 return (
@@ -628,10 +631,10 @@ function ManageQuizContent() {
                         })()}
                         <div className="text-right">
                           <div className="text-sm font-medium text-slate-700">
-                            {date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            {responseDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </div>
                           <div className="text-xs text-slate-400">
-                            {date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            Diisi {date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}, {date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </div>
                         {isExpanded ? (

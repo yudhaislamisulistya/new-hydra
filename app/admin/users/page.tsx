@@ -476,7 +476,7 @@ export default function AdminUsersPage() {
                   value={filterRole}
                   onChange={(event) => handleFilterChange(event.target.value as "all" | UserRole)}
                 >
-                  <option value="all">Semua Role</option>
+                  <option value="all">Semua Peran</option>
                   <option value="student">Anak / Siswa</option>
                   <option value="parent">Orang Tua</option>
                   <option value="teacher">Guru</option>
@@ -503,7 +503,7 @@ export default function AdminUsersPage() {
                   <tr>
                     <th scope="col" className="px-6 py-4">Nama Lengkap</th>
                     <th scope="col" className="px-6 py-4">Email</th>
-                    <th scope="col" className="px-6 py-4">Role</th>
+                    <th scope="col" className="px-6 py-4">Peran</th>
                     <th scope="col" className="px-6 py-4">Kelompok Program</th>
                     <th scope="col" className="px-6 py-4">Detail Tambahan</th>
                     <th scope="col" className="px-6 py-4 text-right">Aksi</th>
@@ -700,7 +700,7 @@ export default function AdminUsersPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Role</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Peran</span>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold border ${
@@ -711,7 +711,7 @@ export default function AdminUsersPage() {
                       }`}>
                         {roleLabels[editingUser.role]}
                       </span>
-                      <span className="text-xs text-slate-500">Role sudah tetap dan tidak bisa diubah dari halaman ini.</span>
+                      <span className="text-xs text-slate-500">Peran sudah tetap dan tidak bisa diubah dari halaman ini.</span>
                     </div>
                   </div>
                 </div>

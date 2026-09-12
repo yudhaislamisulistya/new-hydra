@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { ProgressBar } from "../../../components/ui/ProgressBar";
-import { CheckCircle2, ClipboardList, ArrowLeft, Trophy } from "lucide-react";
+import { CheckCircle2, ClipboardList, ArrowLeft, Trophy, CalendarDays } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
+import { formatLocalDateKey } from "../../../utils/hydrationCalc";
 
 type QuizSummary = {
   id: string;
@@ -22,7 +24,7 @@ type QuizSummary = {
 
 type SurveyResponseRow = {
   survey_id: string;
-  submitted_at: string;
+  response_date: string;
 };
 
 type SurveyQuestionRow = {
@@ -49,10 +51,24 @@ function isRequiredDailyQuiz(quiz: QuizSummary) {
   return REQUIRED_DAILY_QUIZ_TYPES.has(quiz.survey_type || "");
 }
 
-export default function SurveyPage() {
+function resolveResponseDate(dateParam: string | null, today: string) {
+  if (!dateParam || !/^\d{4}-\d{2}-\d{2}$/.test(dateParam) || dateParam > today) return today;
+
+  const parsedDate = new Date(`${dateParam}T00:00:00`);
+  return !Number.isNaN(parsedDate.getTime()) && formatLocalDateKey(parsedDate) === dateParam ? dateParam : today;
+}
+
+function SurveyContent() {
   const { profile } = useUserStore();
+  const searchParams = useSearchParams();
+  const responseDate = resolveResponseDate(searchParams.get("date"), formatLocalDateKey(new Date()));
+  const responseDateLabel = new Date(`${responseDate}T00:00:00`).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
   const [surveys, setSurveys] = useState<QuizSummary[]>([]);
-  const [todayResponseIds, setTodayResponseIds] = useState<Set<string>>(new Set());
+  const [completedResponseIds, setCompletedResponseIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   // Quiz mode state
@@ -94,20 +110,17 @@ export default function SurveyPage() {
 
         setSurveys(quizItems);
 
-        // 2. Fetch today's responses for this student
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
+        // 2. Fetch responses linked to the selected hydration-log date
         const { data: responsesData, error: resError } = await supabase
           .from('survey_responses')
-          .select('survey_id, submitted_at')
+          .select('survey_id, response_date')
           .eq('respondent_id', profile.id)
-          .gte('submitted_at', today.toISOString());
+          .eq('response_date', responseDate);
 
         if (resError) throw resError;
 
         const completedIds = new Set<string>(((responsesData as SurveyResponseRow[] | null) || []).map((r) => r.survey_id));
-        setTodayResponseIds(completedIds);
+        setCompletedResponseIds(completedIds);
 
       } catch (err) {
         console.error("Error fetching surveys:", err);
@@ -117,7 +130,7 @@ export default function SurveyPage() {
     }
 
     fetchData();
-  }, [profile?.id]);
+  }, [profile?.id, responseDate]);
 
   const handleStartSurvey = async (survey: QuizSummary) => {
     setLoadingQuiz(true);
@@ -216,13 +229,14 @@ export default function SurveyPage() {
           survey_id: activeSurvey.id,
           respondent_id: profile.id,
           student_id: profile.id,
+          response_date: responseDate,
           answers: answersPayload,
         });
 
       if (error) throw error;
 
-      // Mark this survey as completed today
-      setTodayResponseIds(prev => new Set(prev).add(activeSurvey.id));
+      // Mark this survey as completed for the hydration-log date
+      setCompletedResponseIds(prev => new Set(prev).add(activeSurvey.id));
       setShowResult(true);
     } catch (err: unknown) {
       console.error("Error submitting response:", err);
@@ -278,7 +292,7 @@ export default function SurveyPage() {
     const scoreResult = getScoreResult();
     return (
       <>
-        <Header title="Hasil Kuis" />
+        <Header title="Hasil Evaluasi" />
         <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
           <div className="w-28 h-28 bg-green-100 rounded-full flex items-center justify-center mb-6 relative">
             <div className="absolute inset-0 bg-green-400 rounded-full animate-ping opacity-20" />
@@ -286,7 +300,7 @@ export default function SurveyPage() {
           </div>
           <h2 className="text-2xl font-extrabold text-slate-800 mb-2">Terima Kasih!</h2>
           <p className="text-slate-600 mb-2 text-sm max-w-xs">
-            Kamu telah menyelesaikan kuis <strong>{activeSurvey.title}</strong>.
+            Kamu telah menyelesaikan evaluasi <strong>{activeSurvey.title}</strong> untuk tanggal {responseDateLabel}.
           </p>
 
           {scoreResult && (
@@ -314,10 +328,10 @@ export default function SurveyPage() {
           )}
 
           <p className="text-xs text-slate-400 mb-8">
-            Kuis ini bisa dikerjakan lagi besok.
+            Evaluasi untuk tanggal catatan asupan ini sudah tersimpan.
           </p>
           <Button onClick={handleBackToList} variant="outline" className="w-full max-w-xs">
-            Kembali ke Menu Kuis
+            Kembali ke Menu Evaluasi
           </Button>
         </div>
       </>
@@ -444,6 +458,14 @@ export default function SurveyPage() {
           </p>
         </div>
 
+        <div className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-800">
+          <CalendarDays size={20} className="mt-0.5 shrink-0 text-blue-600" />
+          <div>
+            <p className="text-sm font-bold">Tanggal catatan asupan: {responseDateLabel}</p>
+            <p className="mt-0.5 text-xs text-blue-700">Tanggal evaluasi terhubung otomatis dari Catatan Minum dan tidak perlu dipilih kembali.</p>
+          </div>
+        </div>
+
         {loading ? (
           <div className="py-20 flex justify-center">
             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -456,15 +478,15 @@ export default function SurveyPage() {
           </div>
         ) : (
           surveys.map((survey) => {
-            const isCompletedToday = todayResponseIds.has(survey.id);
+            const isCompletedForDate = completedResponseIds.has(survey.id);
 
             return (
-              <Card key={survey.id} className={`border-2 transition-all shadow-sm ${isCompletedToday ? 'border-green-400 bg-green-50' : 'border-slate-100'}`}>
+              <Card key={survey.id} className={`border-2 transition-all shadow-sm ${isCompletedForDate ? 'border-green-400 bg-green-50' : 'border-slate-100'}`}>
                 <CardContent className="p-5">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isCompletedToday ? 'bg-green-100' : 'bg-blue-100'}`}>
-                        {isCompletedToday ? (
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isCompletedForDate ? 'bg-green-100' : 'bg-blue-100'}`}>
+                        {isCompletedForDate ? (
                           <CheckCircle2 size={22} className="text-green-500" />
                         ) : (
                           <ClipboardList size={20} className="text-blue-600" />
@@ -479,10 +501,10 @@ export default function SurveyPage() {
                     </div>
                   </div>
 
-                  {isCompletedToday ? (
+                  {isCompletedForDate ? (
                     <div className="flex items-center gap-2 bg-green-100 px-3 py-2 rounded-lg">
                       <CheckCircle2 size={16} className="text-green-600 shrink-0" />
-                      <p className="text-xs font-semibold text-green-700">Sudah dikerjakan hari ini! Bisa diisi lagi besok.</p>
+                      <p className="text-xs font-semibold text-green-700">Sudah dikerjakan untuk tanggal catatan asupan ini.</p>
                     </div>
                   ) : (
                     <Button
@@ -519,5 +541,17 @@ export default function SurveyPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function SurveyPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
+      </div>
+    }>
+      <SurveyContent />
+    </Suspense>
   );
 }

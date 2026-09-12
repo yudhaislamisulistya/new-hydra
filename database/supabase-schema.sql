@@ -367,6 +367,7 @@ CREATE TABLE IF NOT EXISTS "public"."survey_responses" (
     "respondent_id" "uuid" NOT NULL,
     "student_id" "uuid",
     "submitted_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
+    "response_date" "date" DEFAULT ("timezone"('Asia/Jakarta'::"text", "now"()))::"date" NOT NULL,
     "answers" "jsonb"
 );
 
@@ -542,6 +543,10 @@ CREATE UNIQUE INDEX "profiles_username_unique_idx" ON "public"."profiles" USING 
 
 
 CREATE INDEX "schools_name_idx" ON "public"."schools" USING "btree" ("lower"("name"));
+
+
+
+CREATE INDEX "survey_responses_respondent_date_idx" ON "public"."survey_responses" USING "btree" ("respondent_id", "response_date", "survey_id");
 
 
 

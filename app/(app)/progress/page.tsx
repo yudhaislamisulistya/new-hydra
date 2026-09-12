@@ -47,7 +47,7 @@ type HydrationProgressLog = {
 
 type SurveyProgressResponse = {
   id: string;
-  submitted_at: string;
+  response_date: string;
   surveys: {
     title: string | null;
     survey_type: string | null;
@@ -130,13 +130,15 @@ export default function ProgressPage() {
         .order('logged_at', { ascending: true });
 
       // Fetch Surveys
+      const startDateKey = formatLocalDateKey(startDate);
+      const endDateKey = formatLocalDateKey(endDate);
       const { data: surveys } = await supabase
         .from('survey_responses')
-        .select('id, submitted_at, surveys(title, survey_type)')
+        .select('id, response_date, surveys(title, survey_type)')
         .eq('respondent_id', selectedChildId)
-        .gte('submitted_at', startDate.toISOString())
-        .lte('submitted_at', endDate.toISOString())
-        .order('submitted_at', { ascending: false });
+        .gte('response_date', startDateKey)
+        .lte('response_date', endDateKey)
+        .order('response_date', { ascending: false });
 
       setHydrationLogs(logs || []);
       setSurveyResponses((surveys as unknown as SurveyProgressResponse[]) || []);
@@ -423,7 +425,7 @@ export default function ProgressPage() {
                           <div>
                             <p className="font-bold text-slate-800 text-sm">{s.surveys?.title}</p>
                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
-                              {new Date(s.submitted_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                              {new Date(`${s.response_date}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                             </p>
                           </div>
                         </div>

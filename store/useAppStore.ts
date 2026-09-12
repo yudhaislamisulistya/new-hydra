@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { formatLocalDateKey } from "../utils/hydrationCalc";
 
 interface AppState {
   selectedDate: string; // YYYY-MM-DD
@@ -7,6 +8,6 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>()((set) => ({
-  selectedDate: new Date().toISOString().split("T")[0],
+  selectedDate: formatLocalDateKey(new Date()),
   setSelectedDate: (date) => set({ selectedDate: date }),
 }));

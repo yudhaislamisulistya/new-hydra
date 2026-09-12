@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "../../../utils/api/client";
 import { useEffect, useState } from "react";
 import { BUDDY_ACCESSORIES, BUDDY_COLORS, getBuddyAccessory, getBuddyColor } from "../../../utils/hydrationBuddy";
-import { normalizeUsername } from "../../../utils/authIdentity";
+import { getUserRoleLabel, normalizeUsername } from "../../../utils/authIdentity";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, getParentGenderLabel, PARENT_EDUCATION_OPTIONS, PARENT_GENDER_OPTIONS } from "../../../utils/parentProfile";
 import { XP_PER_HYDRATION_LOG, XP_PER_SURVEY } from "../../../utils/gamification";
 import { calculateBasicFluidNeeds } from "../../../utils/hydrationCalc";
@@ -441,7 +441,7 @@ export default function ProfilePage() {
                 <p className="text-white/80 text-[10px] font-bold uppercase tracking-widest">Level Kamu</p>
                 <div className="flex items-end gap-1 mt-1">
                   <span className="text-4xl font-black">{level}</span>
-                  <span className="text-sm font-medium mb-1 text-white/80">Student</span>
+                  <span className="text-sm font-medium mb-1 text-white/80">{getUserRoleLabel(profile.role)}</span>
                 </div>
               </div>
               <div className="text-right w-32">
@@ -837,10 +837,10 @@ export default function ProfilePage() {
           <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 font-bold border-4 border-white shadow-md text-4xl mb-4">
             {profile?.nickname ? profile.nickname.charAt(0).toUpperCase() : "U"}
           </div>
-          <h2 className="text-2xl font-bold text-slate-800">{profile?.nickname || "User"}</h2>
+          <h2 className="text-2xl font-bold text-slate-800">{profile?.nickname || "Pengguna"}</h2>
           <p className="text-slate-500 font-medium capitalize flex items-center gap-1 mt-1">
             <ShieldCheck size={16} className="text-blue-500" />
-            {profile?.role === "parent" ? "Orang Tua" : profile?.role}
+            {getUserRoleLabel(profile?.role)}
           </p>
         </div>
 
