@@ -458,8 +458,9 @@ CREATE POLICY notifications_insert_guardian
 ON public.child_notifications FOR INSERT TO authenticated
 WITH CHECK (
   sender_parent_id = auth.uid()
-  AND public.current_user_role() = 'parent'
+  AND public.current_user_role() IN ('parent', 'teacher')
   AND public.can_access_student(child_id)
+  AND EXISTS (SELECT 1 FROM public.student_profiles student WHERE student.id = child_id)
 );
 
 CREATE POLICY notifications_update_child

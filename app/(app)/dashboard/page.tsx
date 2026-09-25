@@ -14,6 +14,7 @@ import { getBuddyAccessory, getBuddyColor } from "../../../utils/hydrationBuddy"
 import { getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, getParentGenderLabel } from "../../../utils/parentProfile";
 import { buildCheckinStats, getCheckinReward, MAX_STREAK_BONUS_DAYS } from "../../../utils/gamification";
+import { getNotificationErrorMessage, sendChildNotification } from "../../../utils/notifications";
 
 const USAGE_VIDEO_URLS = {
   student: "https://youtu.be/hkz8IqdRJNQ",
@@ -522,13 +523,12 @@ export default function DashboardPage() {
   };
 
   const handleSendReminder = async (childId: string, childName: string) => {
-    if (!profile?.id) return;
+    if (!profile?.id || sendingReminderTo) return;
 
     setSendingReminderTo(childId);
-    const supabase = createClient();
 
     try {
-      const { error } = await supabase.from("child_notifications").insert({
+      await sendChildNotification({
         child_id: childId,
         sender_parent_id: profile.id,
         title: "Pengingat Minum",
@@ -536,18 +536,17 @@ export default function DashboardPage() {
         type: "reminder",
       });
 
-      if (error) throw error;
       alert(`Pengingat berhasil dikirim ke ${childName}.`);
     } catch (error) {
       console.error("Error sending reminder:", error);
-      alert(`Gagal mengirim pengingat: ${error instanceof Error ? error.message : "Terjadi kesalahan."}`);
+      alert(`Gagal mengirim pengingat: ${getNotificationErrorMessage(error)}`);
     } finally {
       setSendingReminderTo(null);
     }
   };
 
   const handleSendFeedback = async (childId: string, childName: string) => {
-    if (!profile?.id) return;
+    if (!profile?.id || sendingFeedbackTo) return;
 
     const childStatus = childHydrationMap[childId];
     const customFeedback = feedbackDrafts[childId]?.trim();
@@ -560,10 +559,9 @@ export default function DashboardPage() {
     const feedbackMessage = customFeedback || `${childName}, ayo tambah minum air putih hari ini. Kamu masih perlu ${childStatus.remainingMl} ml lagi agar target harian tercapai.`;
 
     setSendingFeedbackTo(childId);
-    const supabase = createClient();
 
     try {
-      const { error } = await supabase.from("child_notifications").insert({
+      await sendChildNotification({
         child_id: childId,
         sender_parent_id: profile.id,
         title: "Feedback Hidrasi Harian",
@@ -571,22 +569,20 @@ export default function DashboardPage() {
         type: "feedback",
       });
 
-      if (error) throw error;
-
       alert(`Feedback harian berhasil dikirim ke ${childName}.`);
       setFeedbackDrafts((current) => ({ ...current, [childId]: "" }));
       setActiveFeedbackChildId(null);
       window.dispatchEvent(new Event("notifications-updated"));
     } catch (error) {
       console.error("Error sending feedback:", error);
-      alert(`Gagal mengirim feedback: ${error instanceof Error ? error.message : "Terjadi kesalahan."}`);
+      alert(`Gagal mengirim feedback: ${getNotificationErrorMessage(error)}`);
     } finally {
       setSendingFeedbackTo(null);
     }
   };
 
   const handleSendTeacherReminder = async (studentId: string, studentName: string) => {
-    if (!profile?.id) return;
+    if (!profile?.id || sendingTeacherReminderTo) return;
 
     const studentStatus = teacherHydrationMap[studentId];
 
@@ -596,10 +592,9 @@ export default function DashboardPage() {
     }
 
     setSendingTeacherReminderTo(studentId);
-    const supabase = createClient();
 
     try {
-      const { error } = await supabase.from("child_notifications").insert({
+      await sendChildNotification({
         child_id: studentId,
         sender_parent_id: profile.id,
         title: "Pengingat Minum dari Guru",
@@ -607,13 +602,11 @@ export default function DashboardPage() {
         type: "reminder",
       });
 
-      if (error) throw error;
-
       alert(`Pengingat berhasil dikirim ke ${studentName}.`);
       window.dispatchEvent(new Event("notifications-updated"));
     } catch (error) {
       console.error("Error sending teacher reminder:", error);
-      alert(`Gagal mengirim pengingat: ${error instanceof Error ? error.message : "Terjadi kesalahan."}`);
+      alert(`Gagal mengirim pengingat: ${getNotificationErrorMessage(error)}`);
     } finally {
       setSendingTeacherReminderTo(null);
     }
@@ -797,7 +790,7 @@ export default function DashboardPage() {
                               <button
                                 type="button"
                                 onClick={() => handleSendTeacherReminder(student.id, studentName)}
-                                disabled={sendingTeacherReminderTo === student.id}
+                                disabled={Boolean(sendingTeacherReminderTo)}
                                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 transition-colors disabled:opacity-50 shrink-0"
                               >
                                 <Bell size={14} />
@@ -959,7 +952,7 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleSendReminder(c.child_id, c.student_profiles?.profiles?.full_name || "anak")}
-                            disabled={sendingReminderTo === c.child_id}
+                            disabled={Boolean(sendingReminderTo)}
                             className="p-2 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-colors disabled:opacity-50"
                             title="Kirim pengingat minum"
                           >
@@ -1038,7 +1031,7 @@ export default function DashboardPage() {
                                       <button
                                         type="button"
                                         onClick={() => handleSendFeedback(c.child_id, childName)}
-                                        disabled={sendingFeedbackTo === c.child_id}
+                                        disabled={Boolean(sendingFeedbackTo)}
                                         className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
                                       >
                                         <SendHorizonal size={14} />

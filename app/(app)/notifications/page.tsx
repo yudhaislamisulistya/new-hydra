@@ -78,7 +78,7 @@ export default function NotificationsPage() {
       <div className="p-6 space-y-4 pb-24">
         <div>
           <h2 className="font-extrabold text-slate-800 text-2xl">Pengingat Untukmu</h2>
-          <p className="text-slate-500 text-sm mt-1">Lihat pesan pengingat dari orang tua agar kamu tetap terhidrasi.</p>
+          <p className="text-slate-500 text-sm mt-1">Lihat pesan pengingat dari orang tua dan guru agar kamu tetap terhidrasi.</p>
         </div>
 
         {loading ? (
