@@ -17,11 +17,8 @@ interface HydrationState {
   fetchLogs: (studentId: string, dailyTarget: number) => Promise<void>;
   addIntake: (
     studentId: string,
-    date: string,
     amount: number,
     drinkType: string,
-    required: number,
-    activity: "rendah" | "sedang" | "tinggi",
     loggedAt?: string
   ) => Promise<boolean>;
 }
@@ -37,12 +34,15 @@ export const useHydrationStore = create<HydrationState>((set) => ({
     // Get today's start and end
     const today = new Date();
     today.setHours(0,0,0,0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
     
     const { data, error } = await supabase
       .from('hydration_logs')
       .select('*')
       .eq('student_id', studentId)
-      .gte('logged_at', today.toISOString());
+      .gte('logged_at', today.toISOString())
+      .lt('logged_at', tomorrow.toISOString());
 
     if (!error && data) {
       const todayStr = formatLocalDateKey(today);
@@ -67,7 +67,7 @@ export const useHydrationStore = create<HydrationState>((set) => ({
     }
   },
 
-  addIntake: async (studentId, date, amount, drinkType, required, activity, loggedAt) => {
+  addIntake: async (studentId, amount, drinkType, loggedAt) => {
     const supabase = createClient();
     
     // Insert into DB
@@ -84,25 +84,6 @@ export const useHydrationStore = create<HydrationState>((set) => ({
       console.error("Error saving hydration log:", error);
       return false;
     }
-
-    // Update local state
-    set((state) => {
-      const current = state.records[date];
-      const newTotal = (current?.total_intake_ml || 0) + amount;
-      return {
-        records: {
-          ...state.records,
-          [date]: {
-            id: current?.id || Math.random().toString(36).substring(7),
-            date,
-            activity_level: activity,
-            total_intake_ml: newTotal,
-            required_intake_ml: required,
-            status: newTotal >= required ? "fulfilled" : "unfulfilled",
-          },
-        },
-      };
-    });
 
     return true;
   },

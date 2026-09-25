@@ -257,6 +257,9 @@ DECLARE
   actor_role public.user_role;
 BEGIN
   IF TG_OP = 'UPDATE' THEN
+    IF NEW.student_id IS DISTINCT FROM OLD.student_id THEN
+      RAISE EXCEPTION 'Hydration logs cannot be transferred to another student' USING ERRCODE = '42501';
+    END IF;
     IF NEW.recorded_by IS DISTINCT FROM OLD.recorded_by
       OR NEW.recorded_by_name IS DISTINCT FROM OLD.recorded_by_name
       OR NEW.recorded_by_role IS DISTINCT FROM OLD.recorded_by_role THEN
@@ -421,14 +424,14 @@ CREATE POLICY hydration_logs_insert_accessible
 ON public.hydration_logs FOR INSERT TO authenticated
 WITH CHECK (recorded_by = auth.uid() AND public.can_access_student(student_id));
 
-CREATE POLICY hydration_logs_update_self
+CREATE POLICY hydration_logs_update_accessible
 ON public.hydration_logs FOR UPDATE TO authenticated
-USING (student_id = auth.uid())
-WITH CHECK (student_id = auth.uid());
+USING (public.can_access_student(student_id))
+WITH CHECK (public.can_access_student(student_id));
 
-CREATE POLICY hydration_logs_delete_self
+CREATE POLICY hydration_logs_delete_accessible
 ON public.hydration_logs FOR DELETE TO authenticated
-USING (student_id = auth.uid());
+USING (public.can_access_student(student_id));
 
 CREATE POLICY daily_checkins_read_accessible
 ON public.daily_checkins FOR SELECT TO authenticated

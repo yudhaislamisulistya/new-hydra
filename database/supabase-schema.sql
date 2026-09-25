@@ -230,7 +230,7 @@ ALTER TABLE "public"."hydration_feedback" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "public"."hydration_logs" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "student_id" "uuid" NOT NULL,
-    "amount_ml" integer NOT NULL,
+    "amount_ml" integer NOT NULL CONSTRAINT hydration_logs_amount_positive CHECK (amount_ml > 0),
     "drink_type" "text" DEFAULT 'water'::"text",
     "logged_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,
     "created_at" timestamp with time zone DEFAULT "timezone"('utc'::"text", "now"()) NOT NULL,

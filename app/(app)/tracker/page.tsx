@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, ArrowLeft, CheckCircle2, Clock3, Droplets, PlayCircle, Plus, Target } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, ArrowLeft, CheckCircle2, Clock3, Droplets, Pencil, PlayCircle, Plus, Target, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Header } from "../../../components/layout/Header";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
@@ -119,7 +119,7 @@ export default function TrackerPage() {
   const { profile } = useUserStore();
   const { selectedDate, setSelectedDate } = useAppStore();
   const hasEducationAccess = profile?.study_group !== "control";
-  const { addIntake } = useHydrationStore();
+  const { addIntake, fetchLogs } = useHydrationStore();
   const today = formatLocalDateKey(new Date());
 
   const [students, setStudents] = useState<AccessibleStudent[]>([]);
@@ -129,11 +129,16 @@ export default function TrackerPage() {
   const [drinkType, setDrinkType] = useState("Air putih/air matang");
   const [volume, setVolume] = useState<number>(250);
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>("sedang");
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
   const [selectedDateLogs, setSelectedDateLogs] = useState<HydrationLogItem[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
+  const [editingLog, setEditingLog] = useState<HydrationLogItem | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [logsRevision, setLogsRevision] = useState(0);
+  const formRef = useRef<HTMLFormElement>(null);
+  const mutationInFlight = useRef(false);
 
   const selectedStudent = useMemo(
     () => students.find((student) => student.id === selectedStudentId) || null,
@@ -172,44 +177,43 @@ export default function TrackerPage() {
     void fetchAccessibleStudents();
   }, [profile?.id, profile?.role]);
 
-  const fetchSelectedDateLogs = useCallback(async (studentId: string, dateKey: string) => {
-    const supabase = createClient();
-    const [year, month, day] = dateKey.split("-").map(Number);
-    const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-    const endOfDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
-
-    const { data, error } = await supabase
-      .from("hydration_logs")
-      .select("id, amount_ml, drink_type, logged_at, recorded_by_name, recorded_by_role")
-      .eq("student_id", studentId)
-      .gte("logged_at", startOfDay.toISOString())
-      .lt("logged_at", endOfDay.toISOString())
-      .order("logged_at", { ascending: false });
-
-    if (error) {
-      console.error("Error fetching tracker logs:", error);
-      setSelectedDateLogs([]);
-    } else {
-      setSelectedDateLogs((data as HydrationLogItem[]) || []);
-    }
-
-    setLoadingLogs(false);
-  }, []);
-
   useEffect(() => {
-    if (!selectedStudentId) {
+    const controller = new AbortController();
+    async function fetchSelectedDateLogs() {
+      setLoadingLogs(true);
       setSelectedDateLogs([]);
+      if (!selectedStudentId || !selectedDate) {
+        setLoadingLogs(false);
+        return;
+      }
+      const supabase = createClient();
+      const [year, month, day] = selectedDate.split("-").map(Number);
+      const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+      const endOfDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+
+      const { data, error } = await supabase
+        .from("hydration_logs")
+        .select("id, amount_ml, drink_type, logged_at, recorded_by_name, recorded_by_role")
+        .eq("student_id", selectedStudentId)
+        .gte("logged_at", startOfDay.toISOString())
+        .lt("logged_at", endOfDay.toISOString())
+        .order("logged_at", { ascending: false })
+        .abortSignal(controller.signal);
+
+      if (controller.signal.aborted) return;
+
+      if (error) {
+        console.error("Error fetching tracker logs:", error);
+        setSaveError("Catatan minum tidak dapat dimuat. Silakan muat ulang halaman.");
+      } else {
+        setSelectedDateLogs((data as HydrationLogItem[]) || []);
+      }
+
       setLoadingLogs(false);
-      return;
     }
-
-    setLoadingLogs(true);
-    const timer = window.setTimeout(() => {
-      void fetchSelectedDateLogs(selectedStudentId, selectedDate);
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [fetchSelectedDateLogs, selectedDate, selectedStudentId]);
+    void fetchSelectedDateLogs();
+    return () => controller.abort();
+  }, [selectedDate, selectedStudentId, logsRevision]);
 
   const buildSelectedLoggedAtIso = useCallback((dateKey: string, periodKey: string) => {
     const [year, month, day] = dateKey.split("-").map(Number);
@@ -247,24 +251,101 @@ export default function TrackerPage() {
   const faMap: Record<ActivityLevel, number> = { rendah: 0, sedang: 375, tinggi: 750 };
   const fa = faMap[activityLevel];
 
-  const handleSave = async () => {
-    if (!selectedStudentId || saving) return;
+  const resetEdit = () => {
+    setEditingLog(null);
+    setEditDate("");
+    setDrinkType("Air putih/air matang");
+    setVolume(250);
+    setSelectedPeriod(getHydrationPeriod(new Date()));
+    setSaveError("");
+  };
 
+  const startEdit = (log: HydrationLogItem) => {
+    setEditingLog(log);
+    setEditDate(formatLocalDateKey(log.logged_at));
+    setDrinkType(log.drink_type || "Air putih/air matang");
+    setVolume(log.amount_ml);
+    setSelectedPeriod(getHydrationPeriod(log.logged_at));
+    setSaveError("");
+    setSuccessMessage("");
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    formRef.current?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+  };
+
+  const refreshAfterMutation = () => {
+    setLoadingLogs(true);
+    setLogsRevision((revision) => revision + 1);
+    if (profile?.role === "student" && selectedStudentId === profile.id) {
+      void fetchLogs(profile.id, dailyTarget);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!selectedStudentId || mutationInFlight.current) return;
+    const dateKey = editingLog ? editDate : selectedDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)
+      || formatLocalDateKey(new Date(`${dateKey}T12:00:00`)) !== dateKey || dateKey > today) {
+      setSaveError("Pilih tanggal yang valid, paling lambat hari ini.");
+      return;
+    }
+    if (!Number.isInteger(volume) || volume <= 0 || volume > 2147483647 || !drinkType.trim()) {
+      setSaveError("Isi jenis minuman dan volume dalam bilangan bulat lebih dari 0 ml.");
+      return;
+    }
+    mutationInFlight.current = true;
     setSaving(true);
     setSaveError("");
-    const loggedAt = buildSelectedLoggedAtIso(selectedDate, selectedPeriod);
-    const isSaved = await addIntake(selectedStudentId, selectedDate, volume, drinkType, dailyTarget, activityLevel, loggedAt);
-
-    if (isSaved) {
-      setShowSuccess(true);
-      setLoadingLogs(true);
-      void fetchSelectedDateLogs(selectedStudentId, selectedDate);
-      setTimeout(() => setShowSuccess(false), 2000);
-    } else {
-      setSaveError("Catatan minum gagal disimpan. Pastikan akun Anda berhak mengakses siswa ini.");
+    setSuccessMessage("");
+    try {
+      // Preserve the original time when only the type or amount is corrected.
+      const loggedAt = editingLog && dateKey === formatLocalDateKey(editingLog.logged_at)
+        && selectedPeriod === getHydrationPeriod(editingLog.logged_at)
+        ? editingLog.logged_at
+        : buildSelectedLoggedAtIso(dateKey, selectedPeriod);
+      if (editingLog) {
+        const { error } = await createClient().from("hydration_logs")
+          .update({ amount_ml: volume, drink_type: drinkType, logged_at: loggedAt })
+          .eq("id", editingLog.id).eq("student_id", selectedStudentId)
+          .select("id").single();
+        if (error) throw error;
+      } else {
+        const saved = await addIntake(selectedStudentId, volume, drinkType, loggedAt);
+        if (!saved) throw new Error("Insert failed");
+      }
+      setSuccessMessage(editingLog ? "Catatan minum berhasil diperbarui." : `Berhasil mencatat minum untuk ${selectedStudentName}!`);
+      resetEdit();
+      setSelectedDate(dateKey);
+      refreshAfterMutation();
+    } catch (error) {
+      console.error("Error saving hydration log:", error);
+      setSaveError("Catatan minum gagal disimpan. Periksa koneksi dan hak akses Anda; catatan mungkin sudah dihapus. Silakan muat ulang jika perlu.");
+    } finally {
+      mutationInFlight.current = false;
+      setSaving(false);
     }
+  };
 
-    setSaving(false);
+  const handleDelete = async (log: HydrationLogItem) => {
+    if (!selectedStudentId || mutationInFlight.current) return;
+    if (!window.confirm(`Hapus catatan ${log.drink_type || "Air putih"} sebanyak ${log.amount_ml} ml pada ${new Date(log.logged_at).toLocaleString("id-ID")}? Total asupan akan dihitung ulang.`)) return;
+    mutationInFlight.current = true;
+    setSaving(true);
+    setSaveError("");
+    setSuccessMessage("");
+    try {
+      const { error } = await createClient().from("hydration_logs").delete()
+        .eq("id", log.id).eq("student_id", selectedStudentId).select("id").single();
+      if (error) throw error;
+      if (editingLog?.id === log.id) resetEdit();
+      setSuccessMessage("Catatan minum berhasil dihapus. Total asupan telah diperbarui.");
+      refreshAfterMutation();
+    } catch (error) {
+      console.error("Error deleting hydration log:", error);
+      setSaveError("Catatan minum gagal dihapus. Periksa koneksi dan hak akses Anda; catatan mungkin sudah dihapus. Silakan muat ulang jika perlu.");
+    } finally {
+      mutationInFlight.current = false;
+      setSaving(false);
+    }
   };
 
   const totalSelectedDate = useMemo(
@@ -299,11 +380,12 @@ export default function TrackerPage() {
                 label="Siswa yang Dicatat"
                 value={selectedStudentId}
                 onChange={(event) => {
-                  setSaveError("");
+                  resetEdit();
+                  setSuccessMessage("");
                   setLoadingLogs(true);
                   setSelectedStudentId(event.target.value);
                 }}
-                disabled={loadingStudents || students.length === 0}
+                disabled={saving || loadingStudents || students.length === 0}
                 options={students.map((student) => ({
                   value: student.id,
                   label: student.name + (student.student_code ? " — " + student.student_code : ""),
@@ -325,15 +407,15 @@ export default function TrackerPage() {
           </CardContent>
         </Card>
 
-        {showSuccess && (
-          <div className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-3 animate-fade-in-up">
+        {successMessage && (
+          <div role="status" className="bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl flex items-center gap-3 animate-fade-in-up">
             <CheckCircle2 className="text-green-500" />
-            <p className="font-semibold text-sm">Berhasil mencatat minum untuk {selectedStudentName}!</p>
+            <p className="font-semibold text-sm">{successMessage}</p>
           </div>
         )}
 
         {saveError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
             {saveError}
           </div>
         )}
@@ -368,12 +450,15 @@ export default function TrackerPage() {
 
         {/* 2. Tambah Minum */}
         <div>
-          <h3 className="font-bold text-slate-800 text-lg">Tambah Minuman</h3>
-          <p className="text-sm text-slate-500 mt-1">Pilih tanggal dulu, lalu catatan akan masuk ke kelompok pagi, siang, sore, atau malam sesuai jam penyimpanan.</p>
+          <h3 className="font-bold text-slate-800 text-lg">{editingLog ? "Sunting Minuman" : "Tambah Minuman"}</h3>
+          <p className="text-sm text-slate-500 mt-1">{editingLog ? "Perbaiki tanggal, waktu, jenis minuman, atau volumenya, lalu simpan perubahan." : "Pilih tanggal dan waktu minum. Jika ada kesalahan, gunakan Sunting atau Hapus pada riwayat di bawah."}</p>
+          <a href="#riwayat-minuman" className="mt-2 inline-block text-sm font-semibold text-blue-600 underline">Lihat dan kelola riwayat minuman</a>
         </div>
 
         <Card>
-          <CardContent className="p-6 space-y-5">
+          <CardContent className="p-6">
+            <form ref={formRef} onSubmit={(event) => { event.preventDefault(); void handleSave(); }}>
+            <fieldset disabled={saving} className="space-y-5">
             <div className="w-full flex flex-col gap-1.5">
               <label htmlFor="tracker-date" className="text-sm font-medium text-slate-700">
                 Tanggal
@@ -381,9 +466,15 @@ export default function TrackerPage() {
               <input
                 id="tracker-date"
                 type="date"
-                value={selectedDate}
+                value={editingLog ? editDate : selectedDate}
                 max={today}
+                required
                 onChange={(event) => {
+                  if (editingLog) {
+                    setEditDate(event.target.value);
+                    return;
+                  }
+                  if (!event.target.value) return;
                   setLoadingLogs(true);
                   setSelectedDate(event.target.value);
                 }}
@@ -402,15 +493,20 @@ export default function TrackerPage() {
               label="Jenis Minuman"
               value={drinkType}
               onChange={(event) => setDrinkType(event.target.value)}
-              options={DRINK_TYPES}
+              options={DRINK_TYPES.some((option) => option.value === drinkType) ? DRINK_TYPES : [{ value: drinkType, label: drinkType }, ...DRINK_TYPES]}
+              required
             />
 
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-2 block">Volume (ml)</label>
+              <label htmlFor="tracker-volume" className="text-sm font-medium text-slate-700 mb-2 block">Volume (ml)</label>
+              <input id="tracker-volume" type="number" min="1" max="2147483647" step="1" required
+                value={volume || ""} onChange={(event) => setVolume(Number(event.target.value))}
+                className="mb-3 h-12 w-full rounded-xl border border-slate-200 bg-white px-4 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <div className="flex flex-wrap gap-2">
                 {DRINK_VOLUMES.map((drinkVolume) => (
                   <button
                     key={drinkVolume}
+                    type="button"
                     onClick={() => setVolume(drinkVolume)}
                     className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                       volume === drinkVolume
@@ -424,10 +520,15 @@ export default function TrackerPage() {
               </div>
             </div>
 
-            <Button className="w-full mt-4 gap-2" size="lg" onClick={handleSave} disabled={!selectedStudent || saving || loadingStudents}>
-              <Plus size={20} />
-              {saving ? "Menyimpan..." : "Simpan Minum (" + volume + "ml)"}
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              {editingLog && <Button type="button" variant="outline" onClick={resetEdit}>Batal</Button>}
+              <Button type="submit" className="flex-1 gap-2" size="lg" disabled={!selectedStudent || saving || loadingStudents || loadingLogs}>
+                {editingLog ? <Pencil size={20} /> : <Plus size={20} />}
+                {saving ? "Menyimpan..." : editingLog ? "Simpan Perubahan" : "Simpan Minum (" + volume + "ml)"}
+              </Button>
+            </div>
+            </fieldset>
+            </form>
           </CardContent>
         </Card>
 
@@ -437,11 +538,11 @@ export default function TrackerPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-blue-500">Keseimbangan Cairan Tubuh {profile?.role === "student" ? "Kamu" : selectedStudentName}</p>
-                <h2 className="text-2xl font-extrabold text-slate-800 mt-1">{totalSelectedDate} / {dailyTarget} ml</h2>
+                <h2 className="text-2xl font-extrabold text-slate-800 mt-1">{loadingLogs ? "Memuat..." : `${totalSelectedDate} / ${dailyTarget} ml`}</h2>
                 <p className="text-sm text-slate-500 mt-1">Target harian akan dinilai otomatis sebagai baik atau tidak baik.</p>
               </div>
               <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${adequacyStatus.className}`}>
-                {adequacyStatus.label}
+                {loadingLogs ? "Memuat..." : adequacyStatus.label}
               </span>
             </div>
 
@@ -575,8 +676,8 @@ export default function TrackerPage() {
           <CardContent className="p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="font-bold text-slate-800 text-base">Riwayat Catatan {selectedStudentName}</h3>
-                <p className="text-xs text-slate-500 mt-1">Pembagian otomatis berdasarkan waktu pencatatan pada tanggal yang dipilih.</p>
+                <h3 id="riwayat-minuman" className="scroll-mt-24 font-bold text-slate-800 text-base">Riwayat Catatan {selectedStudentName}</h3>
+                <p className="text-xs text-slate-500 mt-1">Gunakan Sunting untuk memperbaiki catatan atau Hapus untuk membatalkannya. Total asupan diperbarui otomatis.</p>
               </div>
               <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
                 <Droplets size={14} />
@@ -612,7 +713,7 @@ export default function TrackerPage() {
                       <div className="divide-y divide-slate-100">
                         {periodLogs.map((log) => {
                           return (
-                            <div key={log.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                            <div key={log.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2 text-xs text-slate-400">
                                   <Clock3 size={12} />
@@ -626,6 +727,14 @@ export default function TrackerPage() {
                               <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-700">
                                 {log.amount_ml} ml
                               </span>
+                              <div className="flex w-full justify-end gap-2">
+                                <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled={saving || loadingLogs} onClick={() => startEdit(log)} aria-label={`Sunting ${log.drink_type || "Air putih"} ${log.amount_ml} ml`}>
+                                  <Pencil size={14} /> Sunting
+                                </Button>
+                                <Button type="button" variant="danger" size="sm" className="gap-1.5" disabled={saving || loadingLogs} onClick={() => void handleDelete(log)} aria-label={`Hapus ${log.drink_type || "Air putih"} ${log.amount_ml} ml`}>
+                                  <Trash2 size={14} /> Hapus
+                                </Button>
+                              </div>
                             </div>
                           );
                         })}
