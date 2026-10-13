@@ -19,40 +19,10 @@ import {
 } from "../../../utils/hydrationInsights";
 import { createClient } from "../../../utils/api/client";
 import { getUserRoleLabel } from "../../../utils/authIdentity";
+import { DRINK_TYPES, TRACKER_PERIOD_HOURS, TRACKER_PERIOD_OPTIONS } from "../../../utils/hydrationLogbook";
+import { LogbookExcelImport } from "../../../components/hydration/LogbookExcelImport";
 
 const DRINK_VOLUMES = [100, 125, 150, 200, 250, 350, 500];
-const TRACKER_PERIOD_OPTIONS = [
-  { value: "pagi", label: "Pagi" },
-  { value: "siang", label: "Siang" },
-  { value: "sore", label: "Sore" },
-  { value: "malam", label: "Malam" },
-];
-
-const TRACKER_PERIOD_HOURS: Record<string, number> = {
-  pagi: 8,
-  siang: 12,
-  sore: 16,
-  malam: 20,
-};
-
-const DRINK_TYPES = [
-  { value: "Air putih/air matang", label: "Air putih / Air matang" },
-  { value: "Air mineral kemasan", label: "Air mineral kemasan" },
-  { value: "Air kelapa", label: "Air kelapa" },
-  { value: "Teh tawar (tanpa gula)", label: "Teh tawar (tanpa gula)" },
-  { value: "Susu cair murni", label: "Susu cair murni" },
-  { value: "Susu cair manis", label: "Susu cair manis" },
-  { value: "Susu dan produk susu cair", label: "Susu dan produk susu cair" },
-  { value: "Jus buah tanpa gula", label: "Jus buah tanpa gula" },
-  { value: "Jus buah berpemanis", label: "Jus buah berpemanis" },
-  { value: "Jus buah kemasan", label: "Jus buah kemasan" },
-  { value: "Teh manis", label: "Teh manis" },
-  { value: "Sirup (air sirup)", label: "Sirup (air sirup)" },
-  { value: "Minuman serbuk/sachet", label: "Minuman serbuk/sachet (Nutrisari, teh serbuk, dll)" },
-  { value: "Minuman soda/soft drink", label: "Minuman soda / Soft drink" },
-  { value: "Minuman isotonik/sport drink", label: "Minuman isotonik / Sport drink" },
-];
-
 const ACTIVITY_OPTIONS = [
   { value: "rendah", label: "Rendah", desc: "Duduk, Nonton", fa: 0 },
   { value: "sedang", label: "Sedang", desc: "Main, Sepeda", fa: 375 },
@@ -419,6 +389,22 @@ export default function TrackerPage() {
             {saveError}
           </div>
         )}
+
+        <LogbookExcelImport
+          students={students}
+          selectedDate={selectedDate}
+          disabled={saving || loadingStudents || Boolean(editingLog)}
+          onBusyChange={(busy) => { mutationInFlight.current = busy; setSaving(busy); }}
+          onImported={(rows, added) => {
+            const targetId = rows.some((row) => row.student_id === selectedStudentId) ? selectedStudentId : rows[0].student_id;
+            const targetDate = rows.filter((row) => row.student_id === targetId).map((row) => row.date).sort().at(-1)!;
+            setSelectedStudentId(targetId);
+            setSelectedDate(targetDate);
+            setSaveError("");
+            setSuccessMessage(`${added} catatan berhasil diimpor. ${rows.length - added} catatan yang sama sudah tersimpan dan diabaikan. Riwayat menampilkan tanggal ${targetDate}; pilih siswa atau tanggal lain untuk melihat catatan lainnya.`);
+            refreshAfterMutation();
+          }}
+        />
 
         {/* 1. Aktivitas Hari Ini (FA) */}
         <Card className="border-2 border-blue-100">

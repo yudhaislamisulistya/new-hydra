@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:logbook-excel": "node scripts/test-logbook-excel.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
@@ -15,6 +16,7 @@
     "@capacitor/core": "^8.3.1",
     "@supabase/supabase-js": "^2.49.0",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "lucide-react": "^0.477.0",
     "next": "16.3.2",
     "react": "19.2.4",
