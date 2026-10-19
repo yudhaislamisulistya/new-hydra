@@ -8,15 +8,9 @@ import { createClient } from "../../../utils/api/client";
 import { ArrowLeft, Calendar, Download, Droplets, Printer, Scale, Target } from "lucide-react";
 import Link from "next/link";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { calculateBasicFluidNeeds, calculateIntakeFromStoredBaseNeed, formatLocalDateKey, getGenderFactor, type LooseGender } from "../../../utils/hydrationCalc";
+import { calculateBasicFluidNeeds, calculateStudentFluidTarget, formatLocalDateKey, getGenderFactor, type LooseGender } from "../../../utils/hydrationCalc";
 import { buildHydrationCorrections, buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { getUserRoleLabel } from "../../../utils/authIdentity";
-
-const ADMIN_ACTIVITY_FACTORS = {
-  rendah: 0,
-  sedang: 275,
-  tinggi: 750,
-} as const;
 
 type StudentDetail = {
   id: string;
@@ -163,8 +157,9 @@ function ActivityDetailContent() {
       startDate.setHours(0, 0, 0, 0);
       endDate = new Date(customEndDate);
       endDate.setHours(23, 59, 59, 999);
-      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-      daysToShow = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      const diffTime = endDate.getTime() - startDate.getTime();
+      if (diffTime < 0) return null;
+      daysToShow = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
     }
 
     if (daysToShow > 90) daysToShow = 90;
@@ -254,27 +249,12 @@ function ActivityDetailContent() {
   const activeDays = new Set(logs.map((log) => formatLocalDateKey(log.logged_at))).size;
   const averagePerActiveDay = activeDays > 0 ? Math.round(totalMl / activeDays) : 0;
   const weight = student.weight_kg || 25;
-  const basicNeed = student.daily_water_target_ml || calculateBasicFluidNeeds(weight);
+  const basicNeed = student.weight_kg ? calculateBasicFluidNeeds(weight) : student.daily_water_target_ml || calculateBasicFluidNeeds(weight);
   const gender = student.gender as LooseGender;
   const genderFactor = getGenderFactor(gender);
-  const targetLow = calculateIntakeFromStoredBaseNeed({
-    base_need_ml: basicNeed,
-    gender,
-    activity_level: "rendah",
-    customActivityFactor: ADMIN_ACTIVITY_FACTORS,
-  });
-  const targetMedium = calculateIntakeFromStoredBaseNeed({
-    base_need_ml: basicNeed,
-    gender,
-    activity_level: "sedang",
-    customActivityFactor: ADMIN_ACTIVITY_FACTORS,
-  });
-  const targetHigh = calculateIntakeFromStoredBaseNeed({
-    base_need_ml: basicNeed,
-    gender,
-    activity_level: "tinggi",
-    customActivityFactor: ADMIN_ACTIVITY_FACTORS,
-  });
+  const targetLow = calculateStudentFluidTarget(student, "rendah");
+  const targetMedium = calculateStudentFluidTarget(student, "sedang");
+  const targetHigh = calculateStudentFluidTarget(student, "tinggi");
   const selectedDayDatum = chartData.find((item) => item.dateKey === selectedDateKey) ?? null;
   const selectedDayLogs = selectedDateKey
     ? filteredLogs.filter((log) => formatLocalDateKey(log.logged_at) === selectedDateKey)
@@ -287,14 +267,17 @@ function ActivityDetailContent() {
   const selectedDateShortLabel = selectedDayDatum?.dateKey || "";
   const dailyDateOptions = chartData.filter((item) => item.volume > 0);
   const rangeTotal = filteredLogs.reduce((total, log) => total + log.amount_ml, 0);
-  const rangeAdequacy = getAdequacyStatus(rangeTotal, targetMedium);
+  const rangeDays = selectedRange ? Math.floor((selectedRange.endDate.getTime() - selectedRange.startDate.getTime()) / 86400000) + 1 : 1;
+  const rangeTarget = targetMedium * rangeDays;
+  const rangeAdequacy = getAdequacyStatus(rangeTotal, rangeTarget);
   const rangePeriodSummaries = buildHydrationPeriodSummaries(filteredLogs);
-  const rangeCorrections = buildHydrationCorrections(filteredLogs, targetMedium);
+  const rangeCorrections = buildHydrationCorrections(filteredLogs, rangeTarget);
   const rangeLabel = selectedRange ? formatRangeLabel(filterType, selectedRange.startDate, selectedRange.endDate) : "Akumulasi Rentang";
   const detailTitle = detailMode === "day" ? selectedDateLabel : rangeLabel;
   const exportSuffix = detailMode === "day" ? selectedDateShortLabel || "harian" : filterType === "custom" ? "custom-range" : filterType;
   const detailLogs = detailMode === "day" ? selectedDayLogs : filteredLogs;
   const detailTotal = detailMode === "day" ? selectedDayTotal : rangeTotal;
+  const detailTarget = detailMode === "day" ? targetMedium : rangeTarget;
   const detailAdequacy = detailMode === "day" ? selectedDayAdequacy : rangeAdequacy;
   const detailPeriodSummaries = detailMode === "day" ? selectedDayPeriodSummaries : rangePeriodSummaries;
   const detailCorrections = detailMode === "day" ? selectedDayCorrections : rangeCorrections;
@@ -352,7 +335,7 @@ function ActivityDetailContent() {
           <div class="summary">
             <span class="chip">Mode: ${detailTitle}</span>
             <span class="chip">FBB: ${basicNeed} ml</span>
-            <span class="chip">Target sedang: ${targetMedium} ml</span>
+            <span class="chip">Total kebutuhan (${detailMode === "day" ? "1 hari" : `${rangeDays} hari`}): ${detailTarget} ml</span>
             <span class="chip">Total: ${detailTotal} ml</span>
             <span class="chip">Status: ${detailAdequacy.label}</span>
           </div>
@@ -620,6 +603,7 @@ function ActivityDetailContent() {
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status Aktif</p>
+                  <p className="mt-2 text-xs text-slate-500">{detailTotal} / {detailTarget} ml total kebutuhan (aktivitas sedang)</p>
                   <span className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-bold ${detailAdequacy.className}`}>
                     {detailAdequacy.label}
                   </span>

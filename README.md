@@ -32,6 +32,31 @@ For an existing database volume, apply new migrations before restarting:
     docker exec -i hydra_postgres_db sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/migrations/20260823_add_student_study_group.sql
     docker exec -i hydra_postgres_db sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/migrations/20260823_add_hydration_log_authorship.sql
     docker exec -i hydra_postgres_db sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/local-security.sql
+    docker exec -i hydra_postgres_db sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/migrations/20261019_import_evaluations.sql
+
+## Pengisian cepat evaluasi
+
+Siswa: buka **Ayo Jawab**. Admin, guru, dan orang tua: buka **Logbook / Ayo Catat**.
+Gunakan **Unduh Template Evaluasi Excel**, isi lembar Pengetahuan dan/atau Sikap,
+lalu unggah, periksa pratinjau, dan konfirmasi impor. Satu baris berisi satu
+evaluasi lengkap untuk satu siswa dan tanggal catatan asupan. Pilihan bernomor
+mengikuti urutan jawaban pada lembar Pertanyaan, bukan nilai benar/salah.
+
+Maksimal 500 evaluasi / 2 MB. Tanggal lampau diperbolehkan, tanggal mendatang
+ditolak. Jawaban lama tidak ditimpa, termasuk ketika unggahan diulang. Identitas
+pengisi mengikuti akun yang masuk; akses siswa tetap diperiksa di server.
+Seluruh unggahan batal jika satu baris tidak valid atau di luar akses.
+
+Kesimpulan hidrasi menggunakan **Total Kebutuhan (FBB × FG + FA)**, bukan FBB.
+Ringkasan dashboard dan laporan menggunakan aktivitas sedang (FA 375 ml);
+halaman Ayo Catat menggunakan aktivitas yang dipilih pada halaman tersebut.
+Akumulasi rentang dibandingkan dengan total kebutuhan seluruh hari pada rentang.
+
+Pengujian:
+
+    npm run test:logbook-excel
+    npm run test:evaluation-excel
+    docker exec -i hydra_postgres_db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < database/tests/evaluation_excel_import.sql
 
 Health checks:
 

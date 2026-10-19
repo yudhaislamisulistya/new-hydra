@@ -22,6 +22,7 @@ services:
       - ./database/supabase-schema.sql:/docker-entrypoint-initdb.d/10_supabase_schema.sql:ro
       - ./database/supabase-data.sql:/docker-entrypoint-initdb.d/20_supabase_data.sql:ro
       - ./database/local-security.sql:/docker-entrypoint-initdb.d/30_local_security.sql:ro
+      - ./database/migrations/20261019_import_evaluations.sql:/docker-entrypoint-initdb.d/40_evaluation_import.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s

@@ -131,10 +131,10 @@ function ManageQuizContent() {
 
         // Fetch respondent names
         if (responsesData && responsesData.length > 0) {
-          const respondentIds = [...new Set(responsesData.map(r => r.respondent_id))];
+          const respondentIds = [...new Set(responsesData.flatMap(r => [r.respondent_id, r.student_id]).filter(Boolean))];
           const { data: profilesData } = await supabase
             .from('profiles')
-            .select('id, full_name, email')
+            .select('id, full_name, email, role')
             .in('id', respondentIds);
 
           const profileMap = (profilesData || []).reduce((acc: any, p: any) => {
@@ -146,6 +146,8 @@ function ManageQuizContent() {
             ...r,
             respondent_name: profileMap[r.respondent_id]?.full_name || 'Tanpa Nama',
             respondent_email: profileMap[r.respondent_id]?.email || '-',
+            respondent_role: getUserRoleLabel(profileMap[r.respondent_id]?.role),
+            student_name: profileMap[r.student_id || r.respondent_id]?.full_name || 'Tanpa Nama',
           }));
           setResponses(merged);
         } else {
@@ -343,7 +345,7 @@ function ManageQuizContent() {
 
     const questionHeaders = questions.map((q, i) => `Pertanyaan ${i + 1}: ${q.question_text}`);
     const scoreHeaders = isScoredExport ? ['Skor', 'Skor Maks', 'Persentase (%)', 'Kesimpulan'] : [];
-    const headers = ['No', 'Nama Responden', 'Email', 'Tanggal Catatan Asupan', 'Waktu Pengisian', ...questionHeaders, ...scoreHeaders];
+    const headers = ['No', 'Nama Siswa', 'Nama Pengisi', 'Peran Pengisi', 'Email Pengisi', 'Tanggal Catatan Asupan', 'Waktu Pengisian', ...questionHeaders, ...scoreHeaders];
 
     const rows = responses.map((r, idx) => {
       const date = new Date(r.submitted_at);
@@ -363,8 +365,10 @@ function ManageQuizContent() {
       }
       return [
         idx + 1,
-        `"${r.respondent_name}"`,
-        `"${r.respondent_email}"`,
+        `"${r.student_name.replace(/"/g, '""')}"`,
+        `"${r.respondent_name.replace(/"/g, '""')}"`,
+        `"${r.respondent_role}"`,
+        `"${r.respondent_email.replace(/"/g, '""')}"`,
         `"${new Date(`${r.response_date}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}"`,
         `"${date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}"`,
         ...answerCols,
@@ -607,7 +611,8 @@ function ManageQuizContent() {
                           {idx + 1}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-800">{r.respondent_name}</p>
+                          <p className="font-bold text-slate-800">{r.student_name}</p>
+                          <p className="text-xs text-slate-500">Pengisi: {r.respondent_name} ({r.respondent_role})</p>
                           <p className="text-xs text-slate-500">{r.respondent_email}</p>
                         </div>
                       </div>

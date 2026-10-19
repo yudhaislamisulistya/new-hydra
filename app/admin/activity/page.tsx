@@ -6,13 +6,7 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { createClient } from "../../../utils/api/client";
 import { Activity, ArrowRight, Target, Scale } from "lucide-react";
 import Link from "next/link";
-import { calculateBasicFluidNeeds, calculateIntakeFromStoredBaseNeed, getGenderFactor } from "../../../utils/hydrationCalc";
-
-const ADMIN_ACTIVITY_FACTORS = {
-  rendah: 0,
-  sedang: 275,
-  tinggi: 750,
-} as const;
+import { calculateBasicFluidNeeds, calculateStudentFluidTarget, getGenderFactor } from "../../../utils/hydrationCalc";
 
 type StudentRow = {
   id: string;
@@ -86,26 +80,11 @@ export default function AdminActivityPage() {
           (student) => {
             const detail = detailMap[student.id];
             const weight = detail?.weight_kg || 25;
-            const baseNeed = detail?.daily_water_target_ml || calculateBasicFluidNeeds(weight);
+            const baseNeed = detail?.weight_kg ? calculateBasicFluidNeeds(weight) : detail?.daily_water_target_ml || calculateBasicFluidNeeds(weight);
             const genderFactor = getGenderFactor(detail?.gender);
-            const needLow = calculateIntakeFromStoredBaseNeed({
-              base_need_ml: baseNeed,
-              gender: detail?.gender,
-              activity_level: "rendah",
-              customActivityFactor: ADMIN_ACTIVITY_FACTORS,
-            });
-            const needMedium = calculateIntakeFromStoredBaseNeed({
-              base_need_ml: baseNeed,
-              gender: detail?.gender,
-              activity_level: "sedang",
-              customActivityFactor: ADMIN_ACTIVITY_FACTORS,
-            });
-            const needHigh = calculateIntakeFromStoredBaseNeed({
-              base_need_ml: baseNeed,
-              gender: detail?.gender,
-              activity_level: "tinggi",
-              customActivityFactor: ADMIN_ACTIVITY_FACTORS,
-            });
+            const needLow = calculateStudentFluidTarget(detail, "rendah");
+            const needMedium = calculateStudentFluidTarget(detail, "sedang");
+            const needHigh = calculateStudentFluidTarget(detail, "tinggi");
 
             return {
               ...student,

@@ -39,12 +39,10 @@ export function calculateIntakeFromStoredBaseNeed(params: {
   base_need_ml: number;
   gender: LooseGender;
   activity_level: ActivityLevel;
-  customActivityFactor?: Partial<Record<ActivityLevel, number>>;
 }): number {
-  const { base_need_ml, gender, activity_level, customActivityFactor } = params;
+  const { base_need_ml, gender, activity_level } = params;
   const fg = getGenderFactor(gender);
-  const defaultFa = getActivityFactor(activity_level);
-  const fa = customActivityFactor?.[activity_level] ?? defaultFa;
+  const fa = getActivityFactor(activity_level);
   return Math.round(base_need_ml * fg + fa);
 }
 
@@ -65,6 +63,16 @@ export function calculateRequiredIntake(params: HydrationParams): number {
   const tfi = fbb * fg + fa;
 
   return Math.round(tfi);
+}
+
+// daily_water_target_ml stores FBB, not the total daily requirement.
+export function calculateStudentFluidTarget(student: {
+  weight_kg?: number | null; gender?: LooseGender; daily_water_target_ml?: number | null;
+} | null | undefined, activity_level: ActivityLevel = "sedang"): number {
+  const baseNeed = student?.weight_kg && student.weight_kg > 0
+    ? calculateBasicFluidNeeds(student.weight_kg)
+    : student?.daily_water_target_ml || calculateBasicFluidNeeds(25);
+  return calculateIntakeFromStoredBaseNeed({ base_need_ml: baseNeed, gender: student?.gender, activity_level });
 }
 
 export function formatLocalDateKey(dateInput: Date | string): string {

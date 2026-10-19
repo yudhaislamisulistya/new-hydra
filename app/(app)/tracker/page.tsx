@@ -11,7 +11,7 @@ import { Select } from "../../../components/ui/Select";
 import { useUserStore } from "../../../store/useUserStore";
 import { useAppStore } from "../../../store/useAppStore";
 import { useHydrationStore } from "../../../store/useHydrationStore";
-import { calculateRequiredIntake, formatLocalDateKey, type ActivityLevel, type Gender } from "../../../utils/hydrationCalc";
+import { calculateStudentFluidTarget, calculateBasicFluidNeeds, getGenderFactor, getActivityFactor, normalizeGender, formatLocalDateKey, type ActivityLevel } from "../../../utils/hydrationCalc";
 import {
   buildHydrationPeriodSummaries,
   getAdequacyStatus,
@@ -21,6 +21,7 @@ import { createClient } from "../../../utils/api/client";
 import { getUserRoleLabel } from "../../../utils/authIdentity";
 import { DRINK_TYPES, TRACKER_PERIOD_HOURS, TRACKER_PERIOD_OPTIONS } from "../../../utils/hydrationLogbook";
 import { LogbookExcelImport } from "../../../components/hydration/LogbookExcelImport";
+import { EvaluationExcelImport } from "../../../components/hydration/EvaluationExcelImport";
 
 const DRINK_VOLUMES = [100, 125, 150, 200, 250, 350, 500];
 const ACTIVITY_OPTIONS = [
@@ -203,23 +204,13 @@ export default function TrackerPage() {
   // Target dihitung dari berat badan, jenis kelamin, dan aktivitas hari ini (FBB × FG + FA)
   const dailyTarget = useMemo(() => {
     if (!selectedStudent) return 1500;
-    return calculateRequiredIntake({
-      weight_kg: selectedStudent.weight_kg || 25,
-      gender: (selectedStudent.gender || "L") as Gender,
-      activity_level: activityLevel,
-    });
+    return calculateStudentFluidTarget(selectedStudent, activityLevel);
   }, [activityLevel, selectedStudent]);
 
   // Rincian perhitungan kebutuhan cairan (FBB × FG + FA)
-  const fbb = (() => {
-    const w = selectedStudent?.weight_kg || 25;
-    if (w <= 10) return 100 * w;
-    if (w <= 20) return 1000 + 50 * (w - 10);
-    return 1500 + 20 * (w - 20);
-  })();
-  const fg = selectedStudent?.gender === "female" ? 1.0 : 1.05;
-  const faMap: Record<ActivityLevel, number> = { rendah: 0, sedang: 375, tinggi: 750 };
-  const fa = faMap[activityLevel];
+  const fbb = calculateBasicFluidNeeds(selectedStudent?.weight_kg || 25);
+  const fg = getGenderFactor(selectedStudent?.gender);
+  const fa = getActivityFactor(activityLevel);
 
   const resetEdit = () => {
     setEditingLog(null);
@@ -406,6 +397,17 @@ export default function TrackerPage() {
           }}
         />
 
+        {profile?.role !== "student" && <EvaluationExcelImport
+          students={students}
+          selectedDate={selectedDate}
+          disabled={saving || loadingStudents || Boolean(editingLog)}
+          onBusyChange={(busy) => { mutationInFlight.current = busy; setSaving(busy); }}
+          onImported={(_, added, skipped) => {
+            setSaveError("");
+            setSuccessMessage(`${added} evaluasi berhasil disimpan. ${skipped} evaluasi yang sudah terisi dilewati. Jawaban dapat dilihat di menu evaluasi siswa pada tanggal yang sama.`);
+          }}
+        />}
+
         {/* 1. Aktivitas Hari Ini (FA) */}
         <Card className="border-2 border-blue-100">
           <CardContent className="p-5">
@@ -525,7 +527,7 @@ export default function TrackerPage() {
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-blue-500">Keseimbangan Cairan Tubuh {profile?.role === "student" ? "Kamu" : selectedStudentName}</p>
                 <h2 className="text-2xl font-extrabold text-slate-800 mt-1">{loadingLogs ? "Memuat..." : `${totalSelectedDate} / ${dailyTarget} ml`}</h2>
-                <p className="text-sm text-slate-500 mt-1">Target harian akan dinilai otomatis sebagai baik atau tidak baik.</p>
+                <p className="text-sm text-slate-500 mt-1">Kesimpulan membandingkan total asupan dengan Total Kebutuhan (FBB × FG + FA), bukan kebutuhan dasar (FBB).</p>
               </div>
               <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${adequacyStatus.className}`}>
                 {loadingLogs ? "Memuat..." : adequacyStatus.label}
@@ -564,7 +566,7 @@ export default function TrackerPage() {
                 <span className="font-extrabold text-white">{Math.round(fbb)} ml</span>
               </div>
               <div className="flex justify-between text-blue-50 py-1.5">
-                <span>FG ({selectedStudent?.gender === "female" ? "Perempuan" : "Laki-laki"})</span>
+                <span>FG ({normalizeGender(selectedStudent?.gender) === "P" ? "Perempuan" : "Laki-laki"})</span>
                 <span className="font-extrabold text-white">× {fg}</span>
               </div>
               <div className="flex justify-between text-blue-50 py-1.5">

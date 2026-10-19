@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useUserStore } from "../../../store/useUserStore";
 import { useHydrationStore } from "../../../store/useHydrationStore";
+import { useAppStore } from "../../../store/useAppStore";
 import { Header } from "../../../components/layout/Header";
 import { Card, CardContent } from "../../../components/ui/Card";
 import { ProgressBar } from "../../../components/ui/ProgressBar";
 import { AlertCircle, ClipboardList, CheckCircle2, Copy, UserPlus, Trash2, Droplet, ChevronRight, Sparkles, ChevronDown, ChevronUp, Bell, GraduationCap, School2, IdCard, BriefcaseBusiness, Wallet, CalendarDays, MessageSquareText, SendHorizonal, Users, Zap, PlayCircle } from "lucide-react";
 import Link from "next/link";
-import { calculateRequiredIntake, formatLocalDateKey, type ActivityLevel, type Gender } from "../../../utils/hydrationCalc";
+import { calculateStudentFluidTarget, formatLocalDateKey, type ActivityLevel } from "../../../utils/hydrationCalc";
 import { createClient } from "../../../utils/api/client";
 import { getBuddyAccessory, getBuddyColor } from "../../../utils/hydrationBuddy";
 import { getAdequacyStatus } from "../../../utils/hydrationInsights";
@@ -75,6 +76,7 @@ type ChildLink = {
   student_profiles: {
     student_code: string | null;
     weight_kg: number | null;
+    gender: string | null;
     daily_water_target_ml: number | null;
     profiles: {
       full_name: string | null;
@@ -88,6 +90,7 @@ type ChildLinkQueryRow = {
   student_profiles: {
     student_code: string | null;
     weight_kg: number | null;
+    gender: string | null;
     daily_water_target_ml: number | null;
     profiles: {
       full_name: string | null;
@@ -97,6 +100,7 @@ type ChildLinkQueryRow = {
   }[] | {
     student_code: string | null;
     weight_kg: number | null;
+    gender: string | null;
     daily_water_target_ml: number | null;
     profiles: {
       full_name: string | null;
@@ -122,6 +126,7 @@ const normalizeChildLinks = (rows: ChildLinkQueryRow[] | null): ChildLink[] => {
         ? {
             student_code: rawStudentProfile.student_code ?? null,
             weight_kg: rawStudentProfile.weight_kg ?? null,
+            gender: rawStudentProfile.gender ?? null,
             daily_water_target_ml: rawStudentProfile.daily_water_target_ml ?? null,
             profiles: normalizedProfile
               ? { full_name: normalizedProfile.full_name ?? null }
@@ -162,6 +167,8 @@ type TeacherStudentSummary = {
   class_level: number | null;
   child_order: number | null;
   daily_water_target_ml: number | null;
+  weight_kg: number | null;
+  gender: string | null;
   profiles: {
     full_name: string | null;
   } | null;
@@ -173,6 +180,8 @@ type TeacherStudentQueryRow = {
   class_level: number | null;
   child_order: number | null;
   daily_water_target_ml: number | null;
+  weight_kg: number | null;
+  gender: string | null;
   profiles: {
     full_name: string | null;
   }[] | {
@@ -191,6 +200,8 @@ const normalizeTeacherStudents = (rows: TeacherStudentQueryRow[] | null): Teache
       class_level: row.class_level ?? null,
       child_order: row.child_order ?? null,
       daily_water_target_ml: row.daily_water_target_ml ?? null,
+      weight_kg: row.weight_kg ?? null,
+      gender: row.gender ?? null,
       profiles: normalizedProfile
         ? { full_name: normalizedProfile.full_name ?? null }
         : null,
@@ -200,6 +211,7 @@ const normalizeTeacherStudents = (rows: TeacherStudentQueryRow[] | null): Teache
 
 export default function DashboardPage() {
   const { profile } = useUserStore();
+  const setSelectedDate = useAppStore((state) => state.setSelectedDate);
   const hasEducationAccess = profile?.study_group !== "control";
   const hydrationLogGuide = hasEducationAccess
     ? "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lihat hasil dan jangan lupa tonton video pesan penting keseimbangan cairan tubuh kamu."
@@ -211,11 +223,7 @@ export default function DashboardPage() {
 
   // Calculate the correct daily target using FBB × FG + FA
   const dailyTarget = profile?.role === "student"
-    ? calculateRequiredIntake({
-        weight_kg: profile?.weight_kg || 25,
-        gender: (profile?.gender || "L") as Gender,
-        activity_level: activityLevel,
-      })
+    ? calculateStudentFluidTarget(profile, activityLevel)
     : 1500;
 
   useEffect(() => {
@@ -326,7 +334,7 @@ export default function DashboardPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from('parent_children')
-        .select('id, child_id, student_profiles:child_id(id, student_code, weight_kg, height_cm, daily_water_target_ml, profiles!student_profiles_id_fkey(full_name))')
+        .select('id, child_id, student_profiles:child_id(id, student_code, weight_kg, gender, height_cm, daily_water_target_ml, profiles!student_profiles_id_fkey(full_name))')
         .eq('parent_id', profile.id);
       setChildren(normalizeChildLinks((data as ChildLinkQueryRow[] | null) || null));
     }
@@ -362,7 +370,7 @@ export default function DashboardPage() {
       }, {});
 
       const nextMap = children.reduce<Record<string, ChildDailyHydrationStatus>>((acc, child) => {
-        const targetMl = child.student_profiles?.daily_water_target_ml || 1500;
+        const targetMl = calculateStudentFluidTarget(child.student_profiles);
         const totalIntakeMl = totals[child.child_id] || 0;
         const remainingMl = Math.max(targetMl - totalIntakeMl, 0);
         acc[child.child_id] = {
@@ -392,7 +400,7 @@ export default function DashboardPage() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("student_profiles")
-        .select("id, student_code, class_level, child_order, daily_water_target_ml, profiles!student_profiles_id_fkey(full_name)")
+        .select("id, student_code, class_level, child_order, daily_water_target_ml, weight_kg, gender, profiles!student_profiles_id_fkey(full_name)")
         .eq("school_id", profile.school_id)
         .order("class_level", { ascending: true })
         .order("student_code", { ascending: true });
@@ -458,7 +466,7 @@ export default function DashboardPage() {
       }, {});
 
       const nextMap = teacherStudents.reduce<Record<string, ChildDailyHydrationStatus>>((acc, student) => {
-        const targetMl = student.daily_water_target_ml || 1500;
+        const targetMl = calculateStudentFluidTarget(student);
         const totalIntakeMl = totals[student.id] || 0;
         const remainingMl = Math.max(targetMl - totalIntakeMl, 0);
 
@@ -505,7 +513,7 @@ export default function DashboardPage() {
       setChildCode('');
       const { data } = await supabase
         .from('parent_children')
-        .select('id, child_id, student_profiles:child_id(id, student_code, weight_kg, height_cm, daily_water_target_ml, profiles!student_profiles_id_fkey(full_name))')
+        .select('id, child_id, student_profiles:child_id(id, student_code, weight_kg, gender, height_cm, daily_water_target_ml, profiles!student_profiles_id_fkey(full_name))')
         .eq('parent_id', profile.id);
       setChildren(normalizeChildLinks((data as ChildLinkQueryRow[] | null) || null));
     } catch (err: unknown) {
@@ -736,8 +744,8 @@ export default function DashboardPage() {
                   {teacherStudents.slice(0, teacherVisibleCount).map((student) => {
                     const studentStatus = teacherHydrationMap[student.id] || {
                       totalIntakeMl: 0,
-                      targetMl: student.daily_water_target_ml || 1500,
-                      remainingMl: student.daily_water_target_ml || 1500,
+                      targetMl: calculateStudentFluidTarget(student),
+                      remainingMl: calculateStudentFluidTarget(student),
                       isAdequate: false,
                       progressPercent: 0,
                     };
@@ -945,7 +953,7 @@ export default function DashboardPage() {
                             <p className="font-bold text-slate-800 text-sm">{c.student_profiles?.profiles?.full_name || 'Siswa'}</p>
                             <p className="text-[10px] text-slate-400 font-mono">Kode: {c.student_profiles?.student_code}</p>
                             <p className="text-[10px] text-slate-500">
-                              BB: {c.student_profiles?.weight_kg || '-'}kg &bull; Target: {c.student_profiles?.daily_water_target_ml || '-'}ml
+                              BB: {c.student_profiles?.weight_kg || '-'}kg &bull; Total kebutuhan: {calculateStudentFluidTarget(c.student_profiles)}ml
                             </p>
                           </div>
                         </div>
@@ -967,8 +975,8 @@ export default function DashboardPage() {
                       {(() => {
                         const childStatus = childHydrationMap[c.child_id] || {
                           totalIntakeMl: 0,
-                          targetMl: c.student_profiles?.daily_water_target_ml || 1500,
-                          remainingMl: c.student_profiles?.daily_water_target_ml || 1500,
+                          targetMl: calculateStudentFluidTarget(c.student_profiles),
+                          remainingMl: calculateStudentFluidTarget(c.student_profiles),
                           isAdequate: false,
                           progressPercent: 0,
                         };
@@ -1368,11 +1376,11 @@ export default function DashboardPage() {
                   ? "Kamu belum mencapai target minum hari ini. Jangan lupa nonton video edukasi ya!"
                   : "Kamu belum mencapai target minum hari ini. Ayo tambah asupan minummu!"}
               </p>
-              {hasEducationAccess && (
-                <Link href="/education" className="inline-block mt-2 text-xs font-bold text-blue-600 bg-white px-3 py-1.5 rounded-full shadow-sm border border-amber-100">
-                  Tonton Video
-                </Link>
-              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {hasEducationAccess && <Link href="/education" className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 bg-white px-3 py-2 rounded-full shadow-sm border border-amber-100"><PlayCircle size={15} />Tonton Video</Link>}
+                <Link href="/tracker" onClick={() => setSelectedDate(today)} className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-800 bg-white px-3 py-2 rounded-full shadow-sm border border-amber-100"><Droplet size={15} />Ayo Catat</Link>
+                <Link href={`/survey?date=${today}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-white px-3 py-2 rounded-full shadow-sm border border-amber-100"><ClipboardList size={15} />Ayo Jawab</Link>
+              </div>
             </div>
           </div>
         )}

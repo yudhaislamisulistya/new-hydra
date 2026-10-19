@@ -122,9 +122,9 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
   WITH survey_totals AS (
-    SELECT respondent_id AS student_id, count(*)::bigint AS survey_count
+    SELECT COALESCE(student_id, respondent_id) AS student_id, count(*)::bigint AS survey_count
     FROM public.survey_responses
-    GROUP BY respondent_id
+    GROUP BY COALESCE(student_id, respondent_id)
   ), hydration_totals AS (
     SELECT student_id, count(*)::bigint AS hydration_count
     FROM public.hydration_logs

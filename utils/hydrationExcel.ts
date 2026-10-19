@@ -20,7 +20,7 @@ export type ImportLog = {
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase("id-ID");
 
-function styleHeader(sheet: Worksheet) {
+export function styleHeader(sheet: Worksheet) {
   sheet.getRow(1).font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0E7490" } };
   sheet.getRow(1).height = 30;
@@ -91,13 +91,13 @@ export async function buildLogbookTemplate(students: ImportStudent[], exampleDat
   return workbook.xlsx.writeBuffer();
 }
 
-function cellText(value: CellValue): string {
+export function cellText(value: CellValue): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "string" || typeof value === "number") return String(value).trim();
   throw new Error("Gunakan nilai biasa, bukan rumus, tautan, atau tipe sel khusus.");
 }
 
-function parseDate(value: CellValue, today: string) {
+export function parseDate(value: CellValue, today: string) {
   let text = value instanceof Date ? value.toISOString().slice(0, 10) : cellText(value);
   const localFormat = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (localFormat) text = `${localFormat[3]}-${localFormat[2]}-${localFormat[1]}`;

@@ -11,6 +11,7 @@ import { useSearchParams } from "next/navigation";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
 import { formatLocalDateKey } from "../../../utils/hydrationCalc";
+import { EvaluationExcelImport } from "../../../components/hydration/EvaluationExcelImport";
 
 type QuizSummary = {
   id: string;
@@ -70,6 +71,9 @@ function SurveyContent() {
   const [surveys, setSurveys] = useState<QuizSummary[]>([]);
   const [completedResponseIds, setCompletedResponseIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [excelBusy, setExcelBusy] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
+  const [responseRevision, setResponseRevision] = useState(0);
 
   // Quiz mode state
   const [activeSurvey, setActiveSurvey] = useState<QuizSummary | null>(null);
@@ -114,7 +118,7 @@ function SurveyContent() {
         const { data: responsesData, error: resError } = await supabase
           .from('survey_responses')
           .select('survey_id, response_date')
-          .eq('respondent_id', profile.id)
+          .or(`student_id.eq.${profile.id},and(student_id.is.null,respondent_id.eq.${profile.id})`)
           .eq('response_date', responseDate);
 
         if (resError) throw resError;
@@ -130,7 +134,7 @@ function SurveyContent() {
     }
 
     fetchData();
-  }, [profile?.id, responseDate]);
+  }, [profile?.id, responseDate, responseRevision]);
 
   const handleStartSurvey = async (survey: QuizSummary) => {
     setLoadingQuiz(true);
@@ -223,20 +227,22 @@ function SurveyContent() {
         };
       });
 
-      const { error } = await supabase
-        .from('survey_responses')
-        .insert({
+      const { data, error } = await supabase.rpc('submit_student_evaluations', { entries: [{
           survey_id: activeSurvey.id,
-          respondent_id: profile.id,
           student_id: profile.id,
           response_date: responseDate,
           answers: answersPayload,
-        });
+        }] });
 
       if (error) throw error;
 
       // Mark this survey as completed for the hydration-log date
       setCompletedResponseIds(prev => new Set(prev).add(activeSurvey.id));
+      if (data.skipped > 0) {
+        setImportMessage("Evaluasi pada tanggal ini sudah tersimpan. Jawaban lama tetap dipertahankan.");
+        setActiveSurvey(null);
+        return;
+      }
       setShowResult(true);
     } catch (err: unknown) {
       console.error("Error submitting response:", err);
@@ -466,6 +472,18 @@ function SurveyContent() {
           </div>
         </div>
 
+        {profile?.role === "student" && <EvaluationExcelImport
+          students={[{ id: profile.id, name: profile.nickname, student_code: profile.student_code || null }]}
+          selectedDate={responseDate}
+          disabled={loading || loadingQuiz}
+          onBusyChange={setExcelBusy}
+          onImported={(_, added, skipped) => {
+            setImportMessage(`${added} evaluasi berhasil disimpan. ${skipped} evaluasi yang sudah terisi dilewati.`);
+            setResponseRevision((revision) => revision + 1);
+          }}
+        />}
+        {importMessage && <p role="status" className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">{importMessage}</p>}
+
         {loading ? (
           <div className="py-20 flex justify-center">
             <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -511,7 +529,7 @@ function SurveyContent() {
                       className="w-full mt-1"
                       variant="primary"
                       onClick={() => handleStartSurvey(survey)}
-                      disabled={loadingQuiz}
+                      disabled={loadingQuiz || excelBusy}
                     >
                       {loadingQuiz ? "Memuat..." : "Mulai"}
                     </Button>

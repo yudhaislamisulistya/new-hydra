@@ -9,6 +9,7 @@ import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
 import { buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { getUserRoleLabel } from "../../../utils/authIdentity";
+import { calculateStudentFluidTarget } from "../../../utils/hydrationCalc";
 
 type SchoolRecord = {
   id: string;
@@ -62,7 +63,7 @@ type SchoolStudentDetail = {
   gender: string | null;
   weight_kg: number | null;
   height_cm: number | null;
-  daily_water_target_ml: number | null;
+  total_need_ml: number;
   total_today_ml: number;
   log_count_today: number;
   adequacy_label: string;
@@ -354,7 +355,7 @@ export default function AdminSchoolsPage() {
       const mappedStudents: SchoolStudentDetail[] = normalizedStudents.map((student) => {
         const studentLogs = logsByStudent[student.id] || [];
         const totalTodayMl = studentLogs.reduce((sum, log) => sum + log.amount_ml, 0);
-        const targetMl = student.daily_water_target_ml || 0;
+        const targetMl = calculateStudentFluidTarget(student);
         const adequacy = getAdequacyStatus(totalTodayMl, targetMl);
 
         return {
@@ -368,7 +369,7 @@ export default function AdminSchoolsPage() {
           gender: student.gender,
           weight_kg: student.weight_kg,
           height_cm: student.height_cm,
-          daily_water_target_ml: targetMl,
+          total_need_ml: targetMl,
           total_today_ml: totalTodayMl,
           log_count_today: studentLogs.length,
           adequacy_label: adequacy.label,
@@ -622,8 +623,8 @@ export default function AdminSchoolsPage() {
             ) : (
               <div className="mt-5 grid gap-4">
                 {filteredStudents.map((student) => {
-                  const progress = student.daily_water_target_ml
-                    ? Math.min(100, Math.round((student.total_today_ml / student.daily_water_target_ml) * 100))
+                  const progress = student.total_need_ml
+                    ? Math.min(100, Math.round((student.total_today_ml / student.total_need_ml) * 100))
                     : 0;
 
                   return (
@@ -670,9 +671,9 @@ export default function AdminSchoolsPage() {
                               <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
                                 <div className="flex items-center gap-2 text-amber-700">
                                   <Target size={16} />
-                                  <p className="text-xs font-bold uppercase tracking-wider">Target Harian</p>
+                                  <p className="text-xs font-bold uppercase tracking-wider">Total Kebutuhan Harian</p>
                                 </div>
-                                <p className="mt-2 text-2xl font-extrabold text-amber-800">{student.daily_water_target_ml || 0} ml</p>
+                                <p className="mt-2 text-2xl font-extrabold text-amber-800">{student.total_need_ml} ml</p>
                                 <p className="mt-1 text-xs text-amber-700">Berat {student.weight_kg || 0} kg • Tinggi {student.height_cm || 0} cm</p>
                               </div>
 

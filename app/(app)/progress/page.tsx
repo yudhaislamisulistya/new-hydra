@@ -6,7 +6,7 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
 import { useRouter } from "next/navigation";
-import { formatLocalDateKey } from "../../../utils/hydrationCalc";
+import { calculateStudentFluidTarget, formatLocalDateKey } from "../../../utils/hydrationCalc";
 import { 
   Droplet, 
   ClipboardList, 
@@ -34,6 +34,7 @@ type ChildProgressRow = {
     student_code: string | null;
     daily_water_target_ml: number | null;
     weight_kg: number | null;
+    gender: string | null;
     profiles: {
       full_name: string | null;
     } | null;
@@ -79,7 +80,7 @@ export default function ProgressPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from('parent_children')
-        .select('child_id, student_profiles:child_id(student_code, daily_water_target_ml, weight_kg, profiles!student_profiles_id_fkey(full_name))')
+        .select('child_id, student_profiles:child_id(student_code, daily_water_target_ml, weight_kg, gender, profiles!student_profiles_id_fkey(full_name))')
         .eq('parent_id', profile.id);
 
       if (data && data.length > 0) {
@@ -135,7 +136,7 @@ export default function ProgressPage() {
       const { data: surveys } = await supabase
         .from('survey_responses')
         .select('id, response_date, surveys(title, survey_type)')
-        .eq('respondent_id', selectedChildId)
+        .or(`student_id.eq.${selectedChildId},and(student_id.is.null,respondent_id.eq.${selectedChildId})`)
         .gte('response_date', startDateKey)
         .lte('response_date', endDateKey)
         .order('response_date', { ascending: false });
@@ -209,7 +210,7 @@ export default function ProgressPage() {
     const total = hydrationLogs.reduce((sum, l) => sum + l.amount_ml, 0);
     const avg = chartData.length > 0 ? Math.round(total / chartData.length) : 0;
     const child = children.find(c => c.child_id === selectedChildId);
-    const target = child?.student_profiles?.daily_water_target_ml || 1500;
+    const target = calculateStudentFluidTarget(child?.student_profiles);
     const goalsReached = chartData.filter(d => d.amount >= target).length;
     
     return {

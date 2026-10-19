@@ -91,7 +91,7 @@ export default function ProfilePage() {
         const { count: surveyCount } = await supabase
           .from('survey_responses')
           .select('id', { count: 'exact', head: true })
-          .eq('respondent_id', profile.id);
+          .or(`student_id.eq.${profile.id},and(student_id.is.null,respondent_id.eq.${profile.id})`);
           
         // Count logs
         const { count: logCount } = await supabase

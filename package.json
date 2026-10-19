@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:logbook-excel": "node scripts/test-logbook-excel.cjs"
+    "test:logbook-excel": "node scripts/test-logbook-excel.cjs",
+    "test:evaluation-excel": "node scripts/test-evaluation-excel.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
