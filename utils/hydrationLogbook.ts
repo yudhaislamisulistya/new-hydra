@@ -19,6 +19,7 @@ export const DRINK_TYPES = [
   { value: "Jus buah berpemanis", label: "Jus buah berpemanis" },
   { value: "Jus buah kemasan", label: "Jus buah kemasan" },
   { value: "Teh manis", label: "Teh manis" },
+  { value: "Teh Manis Kemasan", label: "Teh Manis Kemasan" },
   { value: "Sirup (air sirup)", label: "Sirup (air sirup)" },
   { value: "Minuman serbuk/sachet", label: "Minuman serbuk/sachet (Nutrisari, teh serbuk, dll)" },
   { value: "Minuman soda/soft drink", label: "Minuman soda / Soft drink" },

@@ -26,6 +26,9 @@ async function check() {
   assert.deepEqual(book.worksheets.map((sheet) => sheet.name), ["Logbook", "Panduan", "Siswa", "Pilihan"]);
   assert.equal(book.getWorksheet("Siswa").getCell("A2").value, "001AB");
   assert.equal(book.getWorksheet("Logbook").getCell("C2").dataValidation.type, "list");
+  const drinkChoices = book.getWorksheet("Pilihan").getColumn(2).values;
+  assert.equal(drinkChoices.filter(value => value === "Teh Manis Kemasan").length, 1);
+  assert(drinkChoices.includes("Teh manis"));
   await assert.rejects(parseLogbookExcel(toArrayBuffer(template), students, today), /masih kosong/);
 
   const sheet = book.getWorksheet("Logbook");
@@ -37,6 +40,12 @@ async function check() {
   assert.equal(valid.rows.length, 2);
   assert.equal(valid.rows[0].logged_at, "2026-10-12T01:00:00.000Z");
   assert.equal(valid.rows[1].logged_at, "2026-10-13T09:00:00.000Z");
+  sheet.getCell("D2").value = " teh manis kemasan ";
+  const packagedTea = await parse();
+  assert.equal(packagedTea.errors.length, 0);
+  assert.equal(packagedTea.rows[0].drink_type, "Teh Manis Kemasan");
+  assert.equal((await buildImportPayload(packagedTea.rows))[0].drink_type, "Teh Manis Kemasan");
+  sheet.getCell("D2").value = "Air putih / Air matang";
   const payload = await buildImportPayload(valid.rows);
   const retry = await buildImportPayload([...valid.rows].reverse());
   assert.equal(payload[0].id, retry[1].id);
