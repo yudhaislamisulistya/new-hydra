@@ -108,6 +108,13 @@ rentang tetap memuat seluruh entri pada rentang tersebut. Tidak ada migrasi baru
 
     npm run test:hydration-range
 
+Pantauan perkembangan orang tua memakai ringkasan harian yang sama: warna batang,
+jumlah hari tercapai, dan garis Total Kebutuhan mengikuti aktivitas tersimpan pada
+masing-masing tanggal, bukan rata-rata target rentang. Aktivitas yang belum dipilih
+ditandai sebagai perkiraan; tanggal tanpa asupan tidak dinilai sebagai di bawah
+target. Menu Isi Logbook tidak ditampilkan pada orang tua maupun guru. Menu siswa
+dan admin tetap tersedia; perubahan menu ini tidak mengubah hak akses API.
+
 database/auth-data.sql contains password hashes and is excluded from Git.
 The pre-migration volume new-hydra_hydra_postgres_data and a validated backup
 in /home/new-hydra-backups are retained for rollback. Do not delete them until

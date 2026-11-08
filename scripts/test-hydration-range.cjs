@@ -41,6 +41,12 @@ for (const timezone of ["UTC", "Asia/Jakarta", "America/New_York"]) {
   // An adequate combined total must never turn the second day's inadequate result into "Baik".
   assert.equal(getAdequacyStatus(rows[0].volume + rows[1].volume, rows[0].requiredMl + rows[1].requiredMl).isAdequate, true);
   assert.equal(rows[1].status.isAdequate, false);
+  const varyingTargets = buildDailyHydrationSummaries([
+    { ...logs[0], amount_ml: 1600 }, { ...logs[1], amount_ml: 2200 },
+  ], student, activities, dates.slice(0, 2));
+  assert.deepEqual(varyingTargets.map(row => row.status.isAdequate), [true, false]);
+  // A range-average target of 1975 would incorrectly reverse both of these daily results.
+  assert.deepEqual(varyingTargets.map(row => row.volume >= 1975), [false, true]);
   const csv = dailyHydrationCsv(rows);
   assert.equal(csv.split("\n").length, 4);
   assert.match(csv, /"2026-11-07","tinggi","Tersimpan","250","2350","1","Tidak Baik"/);

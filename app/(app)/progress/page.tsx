@@ -6,8 +6,10 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
 import { useRouter } from "next/navigation";
-import { calculateStudentFluidTarget, formatLocalDateKey } from "../../../utils/hydrationCalc";
-import { activityFor, loadDailyActivities, type ActivityMap } from "../../../utils/dailyActivity";
+import { formatLocalDateKey } from "../../../utils/hydrationCalc";
+import { loadDailyActivities, type ActivityMap } from "../../../utils/dailyActivity";
+import { buildDailyHydrationSummaries, buildHydrationRange, type HydrationRangeType } from "../../../utils/hydrationRange";
+import { fetchAllRows } from "../../../utils/dataAccess";
 import { 
   Droplet, 
   ClipboardList, 
@@ -17,8 +19,9 @@ import {
   BarChart as BarChartIcon
 } from "lucide-react";
 import { 
-  BarChart, 
+  ComposedChart,
   Bar, 
+  Line,
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -28,6 +31,7 @@ import {
 } from "recharts";
 
 type TimeRange = "daily" | "7d" | "14d" | "30d" | "custom";
+const RANGE_TYPES: Record<TimeRange, HydrationRangeType> = { daily: "daily", "7d": "7days", "14d": "14days", "30d": "1month", custom: "custom" };
 
 type ChildProgressRow = {
   child_id: string;
@@ -43,8 +47,10 @@ type ChildProgressRow = {
 };
 
 type HydrationProgressLog = {
+  id: string;
   amount_ml: number;
   logged_at: string;
+  drink_type: string | null;
 };
 
 type SurveyProgressResponse = {
@@ -56,35 +62,35 @@ type SurveyProgressResponse = {
   } | null;
 };
 
-type ProgressChartDatum = {
-  date: string;
-  displayDate: string;
-  amount: number;
-};
-
 export default function ProgressPage() {
   const { profile, isAuthenticated, isLoading: userLoading } = useUserStore();
   const router = useRouter();
+  const today = formatLocalDateKey(new Date());
   const [children, setChildren] = useState<ChildProgressRow[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
-  const [customDates, setCustomDates] = useState({ start: "", end: "" });
+  const [customDates, setCustomDates] = useState(() => ({ start: buildHydrationRange("7days", today, "", "", today).dates[0], end: today }));
   
   const [hydrationLogs, setHydrationLogs] = useState<HydrationProgressLog[]>([]);
   const [activities, setActivities] = useState<ActivityMap>({});
   const [activityError, setActivityError] = useState("");
   const [surveyResponses, setSurveyResponses] = useState<SurveyProgressResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const { range, rangeError } = useMemo(() => {
+    try { return { range: buildHydrationRange(RANGE_TYPES[timeRange], today, customDates.start, customDates.end, today), rangeError: "" }; }
+    catch (error) { return { range: null, rangeError: error instanceof Error ? error.message : "Rentang tanggal tidak valid." }; }
+  }, [timeRange, customDates.start, customDates.end, today]);
 
   // Initial fetch: get children list
   useEffect(() => {
     async function fetchChildren() {
       if (!profile?.id || profile?.role !== 'parent') return;
       const supabase = createClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('parent_children')
         .select('child_id, student_profiles:child_id(student_code, daily_water_target_ml, weight_kg, gender, profiles!student_profiles_id_fkey(full_name))')
         .eq('parent_id', profile.id);
+      if (error) throw error;
 
       if (data && data.length > 0) {
         setChildren((data as unknown as ChildProgressRow[]) || []);
@@ -93,138 +99,67 @@ export default function ProgressPage() {
         setLoading(false);
       }
     }
-    if (!userLoading && isAuthenticated) fetchChildren();
+    if (!userLoading && isAuthenticated) void fetchChildren().catch(() => {
+      setActivityError("Daftar anak gagal dimuat. Silakan muat ulang halaman."); setLoading(false);
+    });
   }, [profile?.id, profile?.role, isAuthenticated, userLoading]);
 
   // Fetch data based on selected child and time range
   useEffect(() => {
+    let active = true;
     async function fetchData() {
-      if (!selectedChildId) return;
+      if (!selectedChildId || !range) return;
       setLoading(true);
+      setActivityError("");
       const supabase = createClient();
-
-      let startDate = new Date();
-      let endDate = new Date();
-
-      if (timeRange === "daily") {
-        startDate.setHours(0, 0, 0, 0);
-      } else if (timeRange === "7d") {
-        startDate.setDate(startDate.getDate() - 6);
-        startDate.setHours(0, 0, 0, 0);
-      } else if (timeRange === "14d") {
-        startDate.setDate(startDate.getDate() - 13);
-        startDate.setHours(0, 0, 0, 0);
-      } else if (timeRange === "30d") {
-        startDate.setDate(startDate.getDate() - 29);
-        startDate.setHours(0, 0, 0, 0);
-      } else if (timeRange === "custom" && customDates.start && customDates.end) {
-        startDate = new Date(customDates.start);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(customDates.end);
-        endDate.setHours(23, 59, 59, 999);
-      }
-
-      // Fetch Hydration
-      const { data: logs } = await supabase
-        .from('hydration_logs')
-        .select('amount_ml, logged_at')
-        .eq('student_id', selectedChildId)
-        .gte('logged_at', startDate.toISOString())
-        .lte('logged_at', endDate.toISOString())
-        .order('logged_at', { ascending: true });
-
-      // Fetch Surveys
-      const startDateKey = formatLocalDateKey(startDate);
-      const endDateKey = formatLocalDateKey(endDate);
-      setActivities(await loadDailyActivities([selectedChildId], startDateKey, endDateKey));
-      const { data: surveys } = await supabase
-        .from('survey_responses')
-        .select('id, response_date, surveys(title, survey_type)')
-        .or(`student_id.eq.${selectedChildId},and(student_id.is.null,respondent_id.eq.${selectedChildId})`)
-        .gte('response_date', startDateKey)
-        .lte('response_date', endDateKey)
-        .order('response_date', { ascending: false });
-
+      const [logs, dailyActivities, surveys] = await Promise.all([
+        fetchAllRows<HydrationProgressLog>((from, to) => supabase.from('hydration_logs')
+          .select('id, amount_ml, drink_type, logged_at').eq('student_id', selectedChildId)
+          .gte('logged_at', range.startDate.toISOString()).lte('logged_at', range.endDate.toISOString())
+          .order('logged_at', { ascending: true }).order('id').range(from, to)),
+        loadDailyActivities([selectedChildId], range.dates[0], range.dates.at(-1)!),
+        fetchAllRows<SurveyProgressResponse>((from, to) => supabase.from('survey_responses')
+          .select('id, response_date, surveys(title, survey_type)')
+          .or(`student_id.eq.${selectedChildId},and(student_id.is.null,respondent_id.eq.${selectedChildId})`)
+          .gte('response_date', range.dates[0]).lte('response_date', range.dates.at(-1)!)
+          .order('response_date', { ascending: false }).order('id').range(from, to).returns<SurveyProgressResponse[]>()),
+      ]);
+      if (!active) return;
+      setActivities(dailyActivities);
       setHydrationLogs(logs || []);
-      setSurveyResponses((surveys as unknown as SurveyProgressResponse[]) || []);
+      setSurveyResponses(surveys || []);
       setLoading(false);
     }
-
-    if (selectedChildId) void fetchData().catch(() => { setActivityError("Perkembangan atau aktivitas harian gagal dimuat. Silakan muat ulang halaman."); setLoading(false); });
-  }, [selectedChildId, timeRange, customDates]);
+    if (selectedChildId && range) void fetchData().catch(() => {
+      if (!active) return;
+      setActivityError("Perkembangan atau aktivitas harian gagal dimuat. Silakan muat ulang halaman.");
+      setHydrationLogs([]); setActivities({}); setSurveyResponses([]); setLoading(false);
+    });
+    return () => { active = false; };
+  }, [selectedChildId, range]);
 
   // Aggregate data for chart
-  const chartData = useMemo<ProgressChartDatum[]>(() => {
-    if (!hydrationLogs) return [];
-
-    const dataMap: Record<string, number> = {};
-    const labelMap: Record<string, string> = {};
-    
-    // Fill with zero for all days in range
-    const endDate = new Date();
-    endDate.setHours(23, 59, 59, 999);
-    let daysCount = timeRange === "7d" ? 7 : timeRange === "14d" ? 14 : timeRange === "30d" ? 30 : 1;
-    
-    if (timeRange !== "custom") {
-      if (timeRange === "daily") {
-        daysCount = 1;
-      }
-      for (let i = 0; i < daysCount; i++) {
-        const d = new Date(endDate);
-        d.setDate(endDate.getDate() - ((daysCount - 1) - i));
-        const key = formatLocalDateKey(d);
-        dataMap[key] = 0;
-        labelMap[key] = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-      }
-    } else if (customDates.start && customDates.end) {
-      const customStart = new Date(customDates.start);
-      customStart.setHours(0, 0, 0, 0);
-      const customEnd = new Date(customDates.end);
-      customEnd.setHours(23, 59, 59, 999);
-      const diffTime = Math.abs(customEnd.getTime() - customStart.getTime());
-      daysCount = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-      for (let i = 0; i < daysCount; i++) {
-        const d = new Date(customStart);
-        d.setDate(customStart.getDate() + i);
-        const key = formatLocalDateKey(d);
-        dataMap[key] = 0;
-        labelMap[key] = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-      }
-    }
-
-    hydrationLogs.forEach(log => {
-      const dateKey = formatLocalDateKey(log.logged_at);
-      dataMap[dateKey] = (dataMap[dateKey] || 0) + log.amount_ml;
-      if (!labelMap[dateKey]) {
-        labelMap[dateKey] = new Date(log.logged_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-      }
-    });
-
-    return Object.entries(dataMap)
-      .map(([date, amount]) => ({
-        date,
-        displayDate: labelMap[date] || new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-        amount
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [hydrationLogs, timeRange, customDates.start, customDates.end]);
+  const chartData = useMemo(() => {
+    const child = children.find(c => c.child_id === selectedChildId);
+    if (!range || !child) return [];
+    return buildDailyHydrationSummaries(hydrationLogs, { ...child.student_profiles, id: selectedChildId }, activities, range.dates).map(day => ({
+      ...day,
+      displayDate: new Date(`${day.dateKey}T00:00:00+07:00`).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short' }),
+    }));
+  }, [hydrationLogs, range, children, selectedChildId, activities]);
 
   const stats = useMemo(() => {
-    const total = hydrationLogs.reduce((sum, l) => sum + l.amount_ml, 0);
+    const total = chartData.reduce((sum, day) => sum + day.volume, 0);
     const avg = chartData.length > 0 ? Math.round(total / chartData.length) : 0;
-    const child = children.find(c => c.child_id === selectedChildId);
-    const target = chartData.length ? Math.round(chartData.reduce((sum, day) => sum + calculateStudentFluidTarget(child?.student_profiles, activityFor(activities, selectedChildId, day.date)), 0) / chartData.length) : calculateStudentFluidTarget(child?.student_profiles);
-    const goalsReached = chartData.filter(d => d.amount >= calculateStudentFluidTarget(child?.student_profiles, activityFor(activities, selectedChildId, d.date))).length;
+    const goalsReached = chartData.filter(day => day.logs.length > 0 && day.status.isAdequate).length;
     
     return {
       total,
       avg,
-      target,
       goalsReached,
       surveyCount: surveyResponses.length
     };
-  }, [hydrationLogs, chartData, children, selectedChildId, surveyResponses, activities]);
+  }, [chartData, surveyResponses]);
 
   if (profile?.role !== 'parent') {
     return (
@@ -239,7 +174,7 @@ export default function ProgressPage() {
     <>
       <Header title="Rincian Perkembangan Anak" />
       <div className="p-6 space-y-6 pb-28">
-        {activityError && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{activityError}</p>}
+        {(rangeError || activityError) && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{rangeError || activityError}</p>}
         
         {/* Top Selection Area */}
         <div className="space-y-4">
@@ -270,7 +205,7 @@ export default function ProgressPage() {
                   timeRange === r ? 'bg-slate-800 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'
                 }`}
               >
-                {r === 'daily' ? 'Hari ini' : r === '7d' ? '7 Hari' : r === '14d' ? '14 Hari' : r === '30d' ? 'Bulanan' : 'Custom'}
+                {r === 'daily' ? 'Hari ini' : r === '7d' ? '7 Hari' : r === '14d' ? '14 Hari' : r === '30d' ? '30 Hari' : 'Khusus'}
               </button>
             ))}
           </div>
@@ -282,6 +217,9 @@ export default function ProgressPage() {
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Mulai</label>
                 <input 
                   type="date" 
+                  aria-label="Tanggal mulai pantauan"
+                  min="1900-01-01"
+                  max={customDates.end || today}
                   value={customDates.start}
                   onChange={e => setCustomDates({...customDates, start: e.target.value})}
                   className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -291,6 +229,9 @@ export default function ProgressPage() {
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2">Sampai</label>
                 <input 
                   type="date" 
+                  aria-label="Tanggal akhir pantauan"
+                  min={customDates.start || "1900-01-01"}
+                  max={today}
                   value={customDates.end}
                   onChange={e => setCustomDates({...customDates, end: e.target.value})}
                   className="w-full p-3 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -300,7 +241,7 @@ export default function ProgressPage() {
           )}
         </div>
 
-        {loading ? (
+        {rangeError || activityError ? null : loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
             <p className="text-slate-400 font-medium">Menganalisis data...</p>
@@ -353,9 +294,10 @@ export default function ProgressPage() {
                 </div>
               </div>
               <CardContent className="p-5 bg-white">
+                <p className="mb-4 text-xs leading-5 text-slate-500">Setiap hari dibandingkan dengan Total Kebutuhan berdasarkan aktivitas anak pada tanggal tersebut. Ketuk grafik untuk melihat aktivitas dan target harian. Jika aktivitas belum dipilih, target sedang ditandai sebagai perkiraan. Rentang khusus maksimal 90 hari.</p>
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
+                    <ComposedChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis 
                         dataKey="displayDate" 
@@ -369,37 +311,43 @@ export default function ProgressPage() {
                         cursor={{fill: '#f8fafc'}}
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
+                            const day = payload[0].payload as (typeof chartData)[number];
                             return (
                               <div className="bg-slate-800 text-white p-2 rounded-xl shadow-xl border border-slate-700">
-                                <p className="text-[10px] font-bold opacity-60 mb-1">{payload[0].payload.displayDate}</p>
-                                <p className="text-sm font-black">{payload[0].value} ml</p>
+                                <p className="text-[10px] font-bold opacity-60 mb-1">{day.displayDate}</p>
+                                <p className="text-sm font-black">Asupan: {day.volume} ml</p>
+                                <p className="text-xs">Total kebutuhan: {day.requiredMl} ml</p>
+                                <p className="text-xs capitalize">Aktivitas: {day.activityLevel} {day.isEstimated ? '(perkiraan)' : '(pilihan tersimpan)'}</p>
+                                <p className="mt-1 text-xs font-bold">{!day.logs.length ? 'Belum ada catatan' : day.status.isAdequate ? 'Target tercapai' : 'Di bawah target'}</p>
                               </div>
                             );
                           }
                           return null;
                         }}
                       />
-                      <Bar dataKey="amount" radius={[6, 6, 0, 0]} barSize={timeRange === '30d' ? 6 : 20}>
-                        {chartData.map((entry, index) => (
+                      <Bar dataKey="volume" name="Asupan harian" radius={[6, 6, 0, 0]} barSize={chartData.length > 14 ? 6 : 20} isAnimationActive={false}>
+                        {chartData.map((entry) => (
                           <Cell 
-                            key={`cell-${index}`} 
-                            fill={entry.amount >= stats.target ? '#3b82f6' : '#94a3b8'} 
-                            fillOpacity={entry.amount >= stats.target ? 1 : 0.3}
+                            key={entry.dateKey}
+                            fill={!entry.logs.length ? '#cbd5e1' : entry.status.isAdequate ? '#3b82f6' : '#f59e0b'}
                           />
                         ))}
                       </Bar>
-                    </BarChart>
+                      <Line dataKey="requiredMl" name="Total kebutuhan harian" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 flex justify-center gap-6">
+                <div className="mt-4 flex flex-wrap justify-center gap-4">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
                     <span className="text-[10px] font-bold text-slate-500 uppercase">Target Tercapai</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-slate-300 rounded-sm"></div>
+                    <div className="w-3 h-3 bg-amber-500 rounded-sm"></div>
                     <span className="text-[10px] font-bold text-slate-500 uppercase">Di bawah Target</span>
                   </div>
+                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-slate-300"></div><span className="text-[10px] font-bold uppercase text-slate-500">Belum Ada Catatan</span></div>
+                  <div className="flex items-center gap-2"><div className="h-0.5 w-4 bg-violet-500"></div><span className="text-[10px] font-bold uppercase text-slate-500">Total Kebutuhan Harian</span></div>
                 </div>
               </CardContent>
             </Card>
