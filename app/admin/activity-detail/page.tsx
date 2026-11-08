@@ -9,12 +9,13 @@ import { ArrowLeft, Calendar, Download, Droplets, Printer, Scale, Target } from 
 import Link from "next/link";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { calculateBasicFluidNeeds, calculateStudentFluidTarget, formatLocalDateKey, getGenderFactor, type LooseGender } from "../../../utils/hydrationCalc";
-import { buildHydrationCorrections, buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
+import { buildHydrationCorrections, buildHydrationPeriodSummaries, getAdequacyStatus, getHydrationPeriodMeta, getHydrationPeriod } from "../../../utils/hydrationInsights";
 import { getUserRoleLabel } from "../../../utils/authIdentity";
-import { activityFor, loadDailyActivities, type ActivityMap } from "../../../utils/dailyActivity";
+import { loadDailyActivities, type ActivityMap } from "../../../utils/dailyActivity";
 import { fetchAllRows } from "../../../utils/dataAccess";
 import { Pagination } from "../../../components/ui/Pagination";
 import { resolveHydrationDate } from "../../../utils/hydrationCalc";
+import { buildDailyHydrationSummaries, buildHydrationRange, dailyHydrationCsv, escapeReportHtml, type HydrationRangeType } from "../../../utils/hydrationRange";
 
 type StudentDetail = {
   id: string;
@@ -35,14 +36,6 @@ type HydrationLog = {
   recorded_by_role: string;
 };
 
-type ChartDatum = {
-  dateKey: string;
-  name: string;
-  fullDateLabel: string;
-  volume: number;
-};
-
-type DetailMode = "range" | "day";
 function parseDateKey(dateKey: string) {
   return new Date(`${dateKey}T00:00:00+07:00`);
 }
@@ -54,22 +47,6 @@ function formatDateKeyLabel(dateKey: string) {
     month: "long",
     year: "numeric",
   });
-}
-
-function formatRangeLabel(filterType: string, startDate: Date, endDate: Date) {
-  if (filterType === "7days") return "Akumulasi 7 Hari Terakhir";
-  if (filterType === "14days") return "Akumulasi 14 Hari Terakhir";
-  if (filterType === "1month") return "Akumulasi 30 Hari Terakhir";
-
-  return `Akumulasi ${startDate.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })} - ${endDate.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })}`;
 }
 
 function downloadFile(content: string, filename: string, mimeType: string) {
@@ -85,20 +62,22 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 function ActivityDetailContent() {
   const searchParams = useSearchParams();
   const studentId = searchParams.get("id");
+  const today = formatLocalDateKey(new Date());
 
   const [student, setStudent] = useState<StudentDetail | null>(null);
   const [logs, setLogs] = useState<HydrationLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [filterType, setFilterType] = useState("daily");
-  const [customStartDate, setCustomStartDate] = useState("");
-  const [customEndDate, setCustomEndDate] = useState("");
+  const [filterType, setFilterType] = useState<HydrationRangeType>(searchParams.get("date") ? "daily" : "7days");
+  const [customStartDate, setCustomStartDate] = useState(() => buildHydrationRange("7days", today, "", "", today).dates[0]);
+  const [customEndDate, setCustomEndDate] = useState(today);
   const [selectedDateKey, setSelectedDateKey] = useState(resolveHydrationDate(searchParams.get("date")));
-  const [detailMode, setDetailMode] = useState<DetailMode>("day");
   const [activities, setActivities] = useState<ActivityMap>({});
   const [logSearch, setLogSearch] = useState("");
   const [logPage, setLogPage] = useState(1);
   const [fetchError, setFetchError] = useState("");
+  const [dailySearch, setDailySearch] = useState("");
+  const [dailyPage, setDailyPage] = useState(1);
 
   useEffect(() => {
     async function fetchData() {
@@ -138,43 +117,10 @@ function ActivityDetailContent() {
     }
   }, [studentId]);
 
-  const selectedRange = useMemo(() => {
-    if (filterType === "daily") {
-      const startDate = new Date(`${selectedDateKey}T00:00:00+07:00`);
-      return { startDate, endDate: new Date(startDate.getTime() + 86400000 - 1), daysToShow: 1 };
-    }
-    let daysToShow = 7;
-    let endDate = new Date();
-    endDate.setHours(23, 59, 59, 999);
-    let startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
-
-    if (filterType === "7days") {
-      startDate.setDate(endDate.getDate() - 6);
-    } else if (filterType === "14days") {
-      startDate.setDate(endDate.getDate() - 13);
-      daysToShow = 14;
-    } else if (filterType === "1month") {
-      startDate.setDate(endDate.getDate() - 29);
-      daysToShow = 30;
-    } else if (filterType === "custom") {
-      if (!customStartDate || !customEndDate) {
-        return null;
-      }
-
-      startDate = new Date(customStartDate);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(customEndDate);
-      endDate.setHours(23, 59, 59, 999);
-      const diffTime = endDate.getTime() - startDate.getTime();
-      if (diffTime < 0) return null;
-      daysToShow = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    }
-
-    if (daysToShow > 90) daysToShow = 90;
-
-    return { startDate, endDate, daysToShow };
-  }, [filterType, customEndDate, customStartDate, selectedDateKey]);
+  const { range: selectedRange, rangeError } = useMemo(() => {
+    try { return { range: buildHydrationRange(filterType, selectedDateKey, customStartDate, customEndDate, today), rangeError: "" }; }
+    catch (error) { return { range: null, rangeError: error instanceof Error ? error.message : "Rentang tanggal tidak valid." }; }
+  }, [filterType, customEndDate, customStartDate, selectedDateKey, today]);
 
   const filteredLogs = useMemo(() => {
     if (!selectedRange) return [];
@@ -185,56 +131,20 @@ function ActivityDetailContent() {
     });
   }, [logs, selectedRange]);
 
-  const chartData = useMemo<ChartDatum[]>(() => {
-    if (!selectedRange) return [];
-
-    const { startDate, daysToShow } = selectedRange;
-
-    const dataMap: Record<string, number> = {};
-    const labelMap: Record<string, string> = {};
-
-    for (let index = 0; index < daysToShow; index += 1) {
-      const day = new Date(startDate);
-      day.setDate(startDate.getDate() + index);
-      const key = formatLocalDateKey(day);
-      dataMap[key] = 0;
-      labelMap[key] =
-        daysToShow <= 7
-          ? day.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", weekday: "short", day: "numeric" })
-          : day.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" });
-    }
-
-    filteredLogs.forEach((log) => {
-      const key = formatLocalDateKey(log.logged_at);
-      if (dataMap[key] !== undefined) {
-        dataMap[key] += log.amount_ml;
-      }
-    });
-
-    return Object.keys(dataMap).map((key) => ({
-      dateKey: key,
-      name: labelMap[key],
-      fullDateLabel: formatDateKeyLabel(key),
-      volume: dataMap[key],
+  const chartData = useMemo(() => {
+    if (!selectedRange || !student) return [];
+    return buildDailyHydrationSummaries(filteredLogs, student, activities, selectedRange.dates).map((day) => ({
+      ...day,
+      name: parseDateKey(day.dateKey).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" }),
+      fullDateLabel: formatDateKeyLabel(day.dateKey),
     }));
-  }, [filteredLogs, selectedRange]);
+  }, [filteredLogs, selectedRange, student, activities]);
 
   useEffect(() => {
-    if (filterType === "daily") return;
-    const latestDay = [...chartData].reverse().find((item) => item.volume > 0) ?? chartData[chartData.length - 1];
-
-    if (!latestDay && selectedDateKey) {
-      const timeoutId = window.setTimeout(() => setSelectedDateKey(""), 0);
-      return () => window.clearTimeout(timeoutId);
-    }
-
-    if (!latestDay || chartData.some((item) => item.dateKey === selectedDateKey)) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => setSelectedDateKey(latestDay.dateKey), 0);
+    if (!selectedRange || selectedRange.dates.includes(selectedDateKey)) return;
+    const timeoutId = window.setTimeout(() => { setSelectedDateKey(selectedRange.dates.at(-1)!); setLogPage(1); }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [chartData, selectedDateKey, filterType]);
+  }, [selectedRange, selectedDateKey]);
 
   if (fetchError) return <p role="alert" className="p-8 text-red-700">{fetchError}</p>;
   if (loading) {
@@ -257,8 +167,9 @@ function ActivityDetailContent() {
   }
 
   const totalMl = logs.reduce((total, log) => total + log.amount_ml, 0);
-  const activeDays = new Set(logs.map((log) => formatLocalDateKey(log.logged_at))).size;
-  const averagePerActiveDay = activeDays > 0 ? Math.round(totalMl / activeDays) : 0;
+  const rangeTotal = filteredLogs.reduce((total, log) => total + log.amount_ml, 0);
+  const activeDays = chartData.filter((day) => day.logs.length > 0).length;
+  const averagePerActiveDay = activeDays > 0 ? Math.round(rangeTotal / activeDays) : 0;
   const weight = student.weight_kg || 25;
   const basicNeed = student.weight_kg ? calculateBasicFluidNeeds(weight) : student.daily_water_target_ml || calculateBasicFluidNeeds(weight);
   const gender = student.gender as LooseGender;
@@ -266,68 +177,68 @@ function ActivityDetailContent() {
   const targetLow = calculateStudentFluidTarget(student, "rendah");
   const targetMedium = calculateStudentFluidTarget(student, "sedang");
   const targetHigh = calculateStudentFluidTarget(student, "tinggi");
-  const selectedActivity = activityFor(activities, student.id, selectedDateKey);
-  const selectedTarget = calculateStudentFluidTarget(student, selectedActivity);
   const selectedDayDatum = chartData.find((item) => item.dateKey === selectedDateKey) ?? null;
-  const selectedDayLogs = selectedDateKey
-    ? filteredLogs.filter((log) => formatLocalDateKey(log.logged_at) === selectedDateKey)
-    : [];
+  const selectedActivity = selectedDayDatum?.activityLevel || "sedang";
+  const selectedTarget = selectedDayDatum?.requiredMl || calculateStudentFluidTarget(student, selectedActivity);
+  const selectedDayLogs = selectedDayDatum?.logs || [];
   const selectedDayTotal = selectedDayLogs.reduce((total, log) => total + log.amount_ml, 0);
-  const selectedDayAdequacy = getAdequacyStatus(selectedDayTotal, selectedTarget);
+  const selectedDayAdequacy = selectedDayDatum?.status || { ...getAdequacyStatus(0, selectedTarget), label: "Pilih rentang valid", className: "border border-slate-200 bg-slate-100 text-slate-600" };
   const selectedDayPeriodSummaries = buildHydrationPeriodSummaries(selectedDayLogs);
-  const selectedDayCorrections = buildHydrationCorrections(selectedDayLogs, selectedTarget);
+  const selectedDayCorrections = selectedDayLogs.length ? buildHydrationCorrections(selectedDayLogs, selectedTarget) : ["Belum ada catatan minum untuk tanggal ini. Status hidrasi belum dapat dinilai dari catatan."];
   const selectedDateLabel = selectedDayDatum?.fullDateLabel || "Belum ada tanggal dipilih";
-  const selectedDateShortLabel = selectedDayDatum?.dateKey || "";
-  const dailyDateOptions = chartData.filter((item) => item.volume > 0);
-  const rangeTotal = filteredLogs.reduce((total, log) => total + log.amount_ml, 0);
-  const rangeDays = selectedRange ? Math.floor((selectedRange.endDate.getTime() - selectedRange.startDate.getTime()) / 86400000) + 1 : 1;
-  const rangeTarget = chartData.reduce((sum, day) => sum + calculateStudentFluidTarget(student, activityFor(activities, student.id, day.dateKey)), 0);
-  const rangeAdequacy = getAdequacyStatus(rangeTotal, rangeTarget);
-  const rangePeriodSummaries = buildHydrationPeriodSummaries(filteredLogs);
-  const rangeCorrections = buildHydrationCorrections(filteredLogs, rangeTarget);
-  const rangeLabel = selectedRange ? formatRangeLabel(filterType, selectedRange.startDate, selectedRange.endDate) : "Akumulasi Rentang";
-  const detailTitle = detailMode === "day" ? selectedDateLabel : rangeLabel;
-  const exportSuffix = detailMode === "day" ? selectedDateShortLabel || "harian" : filterType === "custom" ? "custom-range" : filterType;
-  const detailLogs = detailMode === "day" ? selectedDayLogs : filteredLogs;
-  const detailTotal = detailMode === "day" ? selectedDayTotal : rangeTotal;
-  const detailTarget = detailMode === "day" ? selectedTarget : rangeTarget;
+  const dailyDateOptions = chartData;
+  const rangeLabel = selectedRange ? `${formatDateKeyLabel(selectedRange.dates[0])} – ${formatDateKeyLabel(selectedRange.dates.at(-1)!)}` : "Pilih rentang yang valid";
+  const detailTitle = selectedDateLabel;
+  const exportSuffix = selectedRange ? `${selectedRange.dates[0]}_${selectedRange.dates.at(-1)}` : "harian";
+  const detailLogs = selectedDayLogs;
+  const detailTotal = selectedDayTotal;
+  const detailTarget = selectedTarget;
   const searchedLogs = detailLogs.filter((log) => `${log.drink_type || ""} ${log.recorded_by_name} ${getUserRoleLabel(log.recorded_by_role)} ${log.amount_ml}`.toLocaleLowerCase("id-ID").includes(logSearch.trim().toLocaleLowerCase("id-ID")));
   const safeLogPage = Math.min(logPage, Math.max(1, Math.ceil(searchedLogs.length / 10)));
-  const detailAdequacy = detailMode === "day" ? selectedDayAdequacy : rangeAdequacy;
-  const detailPeriodSummaries = detailMode === "day" ? selectedDayPeriodSummaries : rangePeriodSummaries;
-  const detailCorrections = detailMode === "day" ? selectedDayCorrections : rangeCorrections;
+  const detailAdequacy = selectedDayAdequacy;
+  const detailPeriodSummaries = selectedDayPeriodSummaries;
+  const detailCorrections = selectedDayCorrections;
+  const searchedDays = chartData.filter((day) => `${day.dateKey} ${day.fullDateLabel} ${day.activityLevel} ${day.status.label}`.toLocaleLowerCase("id-ID").includes(dailySearch.trim().toLocaleLowerCase("id-ID")));
+  const safeDailyPage = Math.min(dailyPage, Math.max(1, Math.ceil(searchedDays.length / 10)));
 
   const handleExportExcel = () => {
-    if (!student) return;
+    if (!student || !selectedRange) return;
+    downloadFile(dailyHydrationCsv(chartData), `ringkasan-hidrasi-harian-${exportSuffix}.csv`, "text/csv;charset=utf-8;");
+  };
 
+  const handleExportLogs = () => {
+    if (!student || !selectedRange) return;
+    const summaries = new Map(chartData.map((day) => [day.dateKey, day]));
     const csvRows = [
-      ["Tanggal", "Jam", "Periode", "Jenis Minuman", "Volume (ml)", "Pengisi", "Peran Pengisi"],
-      ...detailLogs.map((log) => {
+      ["Tanggal", "Jam (WIB)", "Periode", "Jenis Minuman", "Volume (ml)", "Pengisi", "Peran Pengisi", "Aktivitas Harian", "Kebutuhan Harian (ml)", "Status Harian"],
+      ...[...filteredLogs].sort((first, second) => first.logged_at.localeCompare(second.logged_at)).map((log) => {
         const logDate = new Date(log.logged_at);
-        const hour = logDate.getHours();
-        const period = hour < 11 ? "Pagi" : hour < 15 ? "Siang" : hour < 18 ? "Sore" : "Malam";
+        const day = summaries.get(formatLocalDateKey(logDate))!;
         return [
           logDate.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" }),
           logDate.toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }),
-          period,
+          getHydrationPeriodMeta(getHydrationPeriod(logDate)).label,
           log.drink_type || "Air putih",
           String(log.amount_ml),
           log.recorded_by_name,
           getUserRoleLabel(log.recorded_by_role),
+          day.activityLevel,
+          String(day.requiredMl),
+          day.status.label,
         ];
       }),
     ];
 
-    const csvContent = `\uFEFF${csvRows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n")}`;
+    const csvContent = `\uFEFF${csvRows.map((row) => row.map((cell) => `"${(/^[=+@\-\t\r]/.test(String(cell)) ? "'" : "") + String(cell).replaceAll('"', '""')}"`).join(",")).join("\n")}`;
     downloadFile(
       csvContent,
-      `hidrasi-${(student.full_name || "siswa").replaceAll(" ", "-").toLowerCase()}-${exportSuffix}.csv`,
+      `catatan-minum-${exportSuffix}.csv`,
       "text/csv;charset=utf-8;"
     );
   };
 
   const handleExportPdf = () => {
-    if (!student) return;
+    if (!student || !selectedRange) return;
 
     const html = `
       <html>
@@ -345,12 +256,18 @@ function ActivityDetailContent() {
           </style>
         </head>
         <body>
-          <h1>${student.full_name || "Tanpa Nama"}</h1>
+          <h1>${escapeReportHtml(student.full_name || "Tanpa Nama")}</h1>
           <p>Ringkasan aktivitas minum siswa - NEW HYDRA</p>
+          <p>Rentang: ${escapeReportHtml(rangeLabel)}. Status dihitung terpisah untuk setiap tanggal.</p>
+          <table>
+            <thead><tr><th>Tanggal</th><th>Aktivitas</th><th>Total Asupan</th><th>Kebutuhan Harian</th><th>Status Harian</th></tr></thead>
+            <tbody>${chartData.map((day) => `<tr><td>${escapeReportHtml(day.fullDateLabel)}</td><td>${day.activityLevel}${day.isEstimated ? " (perkiraan)" : ""}</td><td>${day.volume} ml</td><td>${day.requiredMl} ml</td><td>${day.status.label}</td></tr>`).join("")}</tbody>
+          </table>
+          <h2>Detail harian: ${escapeReportHtml(detailTitle)}</h2>
           <div class="summary">
-            <span class="chip">Mode: ${detailTitle}</span>
+            <span class="chip">Tanggal: ${escapeReportHtml(detailTitle)}</span>
             <span class="chip">FBB: ${basicNeed} ml</span>
-            <span class="chip">Total kebutuhan (${detailMode === "day" ? "1 hari" : `${rangeDays} hari`}): ${detailTarget} ml</span>
+            <span class="chip">Total kebutuhan harian: ${detailTarget} ml</span>
             <span class="chip">Total: ${detailTotal} ml</span>
             <span class="chip">Status: ${detailAdequacy.label}</span>
           </div>
@@ -371,9 +288,9 @@ function ActivityDetailContent() {
                   <tr>
                     <td>${logDate.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" })}</td>
                     <td>${logDate.toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" })}</td>
-                    <td>${log.drink_type || "Air putih"}</td>
+                    <td>${escapeReportHtml(log.drink_type || "Air putih")}</td>
                     <td>${log.amount_ml} ml</td>
-                    <td>${log.recorded_by_name} (${getUserRoleLabel(log.recorded_by_role)})</td>
+                    <td>${escapeReportHtml(log.recorded_by_name)} (${escapeReportHtml(getUserRoleLabel(log.recorded_by_role))})</td>
                   </tr>
                 `;
               }).join("")}
@@ -384,7 +301,7 @@ function ActivityDetailContent() {
     `;
 
     const printWindow = window.open("", "_blank", "width=1024,height=768");
-    if (!printWindow) return;
+    if (!printWindow) { window.alert("Izinkan jendela cetak pada browser untuk mengekspor PDF."); return; }
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
@@ -413,7 +330,7 @@ function ActivityDetailContent() {
                   FG: {genderFactor.toFixed(2)}
                 </span>
                 <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-medium border border-indigo-100">
-                  Sedang: {targetMedium} ml
+                  Aktivitas {selectedActivity}: {selectedTarget} ml
                 </span>
                 <span className="bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
                   BB: {student.weight_kg || "-"} kg
@@ -425,8 +342,9 @@ function ActivityDetailContent() {
             </div>
 
             <div className="text-right">
-              <p className="text-sm font-medium text-slate-500">Total Diminum (Sepanjang Waktu)</p>
-              <p className="text-3xl font-bold text-blue-600">{(totalMl / 1000).toFixed(1)} L</p>
+              <p className="text-sm font-medium text-slate-500">Total Volume dalam Rentang (bukan status gabungan)</p>
+              <p className="text-3xl font-bold text-blue-600">{(rangeTotal / 1000).toFixed(1)} L</p>
+              <p className="text-xs text-slate-400">Sepanjang waktu: {(totalMl / 1000).toFixed(1)} L</p>
               <p className="mt-2 text-xs font-medium text-slate-500">
                 Mode aktif: <span className="text-slate-700">{detailTitle}</span>
               </p>
@@ -434,14 +352,17 @@ function ActivityDetailContent() {
                 <button
                   type="button"
                   onClick={handleExportExcel}
+                  disabled={!selectedRange}
                   className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
                 >
                   <Download size={14} />
-                  Ekspor Excel
+                  Ekspor Ringkasan Harian (CSV)
                 </button>
+                <button type="button" onClick={handleExportLogs} disabled={!selectedRange} className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-40"><Download size={14} />Ekspor Catatan Rentang (CSV)</button>
                 <button
                   type="button"
                   onClick={handleExportPdf}
+                  disabled={!selectedRange}
                   className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100"
                 >
                   <Printer size={14} />
@@ -452,7 +373,7 @@ function ActivityDetailContent() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div id="detail-hidrasi-harian" className="scroll-mt-20 grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="border-0 shadow-md">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
@@ -501,78 +422,71 @@ function ActivityDetailContent() {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                 <div>
                   <h3 className="font-bold text-slate-800 text-lg">Grafik Hidrasi</h3>
-                  <p className="text-sm text-slate-500 mt-1">Gunakan dropdown harian untuk memilih tanggal tertentu, lalu semua detail akan mengikuti tanggal itu.</p>
+                  <p className="text-sm text-slate-500 mt-1">Pilih rentang waktu untuk menampilkan grafik dan ringkasan per tanggal. Detail, kebutuhan, dan status tetap dihitung per hari, bukan digabung.</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-600">Rentang waktu
+                    <select aria-label="Rentang waktu aktivitas" value={filterType} onChange={(event) => { setFilterType(event.target.value as HydrationRangeType); setDailyPage(1); setLogPage(1); }} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                      <option value="daily">Satu Hari</option><option value="7days">7 Hari Terakhir</option><option value="14days">14 Hari Terakhir</option><option value="1month">30 Hari Terakhir</option><option value="custom">Rentang Khusus</option>
+                    </select>
+                  </label>
                   {filterType === "custom" && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="text-xs text-slate-600">Tanggal mulai
                       <input
+                        aria-label="Tanggal mulai rentang"
                         type="date"
                         value={customStartDate}
+                        min="1900-01-01"
+                        max={customEndDate || today}
                         onChange={(event) => {
                           setCustomStartDate(event.target.value);
-                          setDetailMode("range");
+                          setDailyPage(1); setLogPage(1);
                         }}
                         className="text-xs px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-blue-500"
                       />
-                      <span className="text-slate-400 text-xs">sd</span>
+                      </label>
+                      <label className="text-xs text-slate-600">Tanggal akhir
                       <input
+                        aria-label="Tanggal akhir rentang"
                         type="date"
                         value={customEndDate}
+                        min={customStartDate || "1900-01-01"}
+                        max={today}
                         onChange={(event) => {
                           setCustomEndDate(event.target.value);
-                          setDetailMode("range");
+                          setDailyPage(1); setLogPage(1);
                         }}
                         className="text-xs px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-blue-500"
                       />
+                      </label>
                     </div>
                   )}
-                  <input aria-label="Tanggal catatan minum" type="date" value={selectedDateKey} max={formatLocalDateKey(new Date())} onChange={(event) => { if (event.target.value) { setSelectedDateKey(event.target.value); setDetailMode("day"); setLogPage(1); } }} className="rounded-lg border border-slate-200 p-2 text-sm" />
+                  {filterType === "daily" && <input aria-label="Tanggal catatan minum" type="date" min="1900-01-01" value={selectedDateKey} max={today} onChange={(event) => { if (event.target.value) { setSelectedDateKey(event.target.value); setLogPage(1); } }} className="rounded-lg border border-slate-200 p-2 text-sm" />}
                   <select
-                    value={filterType}
-                    onChange={(event) => {
-                      setFilterType(event.target.value);
-                      setDetailMode("range");
-                    }}
-                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="daily">Catatan per Hari</option>
-                  </select>
-                  <select
-                    value={detailMode === "day" ? selectedDateKey : ""}
+                    aria-label="Tanggal detail harian"
+                    disabled={!selectedRange}
+                    value={selectedDayDatum?.dateKey || ""}
                     onChange={(event) => {
                       const nextDateKey = event.target.value;
-                      if (!nextDateKey) {
-                        setDetailMode("range");
-                        return;
-                      }
-
+                      if (!nextDateKey) return;
                       setSelectedDateKey(nextDateKey);
-                      setDetailMode("day");
+                      setLogPage(1);
                     }}
                     className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white min-w-[220px]"
                   >
-                    <option value={selectedDateKey}>{selectedDateKey}</option>
-                    {dailyDateOptions.filter((option) => option.dateKey !== selectedDateKey).map((option) => (
+                    {!selectedDayDatum && <option value="">Pilih tanggal dalam rentang</option>}
+                    {dailyDateOptions.map((option) => (
                       <option key={option.dateKey} value={option.dateKey}>
-                        {option.fullDateLabel} - {option.volume} ml
+                        {option.fullDateLabel} — {option.logs.length ? `${option.volume} ml` : "Belum ada catatan"}
                       </option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    onClick={() => setDetailMode("day")}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                      detailMode === "range"
-                        ? "bg-slate-900 text-white"
-                        : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
-                    }`}
-                  >
-                    Kembali ke Catatan Harian
-                  </button>
                 </div>
               </div>
+              {rangeError && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{rangeError}</p>}
+              <p className="mb-3 text-xs text-slate-500">Rentang aktif: {rangeLabel}. Rentang khusus maksimal 90 hari; seluruh tanggal tetap ditampilkan, termasuk hari tanpa catatan.</p>
 
               <div className="flex-1 min-h-[250px] w-full mt-2">
                 <ResponsiveContainer width="100%" height="100%">
@@ -589,13 +503,15 @@ function ActivityDetailContent() {
                     <Bar
                       dataKey="volume"
                       radius={[4, 4, 0, 0]}
-                      barSize={32}
+                      barSize={chartData.length > 30 ? 6 : chartData.length > 14 ? 12 : 24}
                       name="Volume (ml)"
                       isAnimationActive={false}
                     >
                       {chartData.map((entry) => (
                         <Cell
                           key={entry.dateKey}
+                          onClick={() => { setSelectedDateKey(entry.dateKey); setLogPage(1); }}
+                          cursor="pointer"
                           fill={selectedDateKey === entry.dateKey ? "#0f766e" : entry.volume > 0 ? "#14b8a6" : "#cbd5e1"}
                           stroke={selectedDateKey === entry.dateKey ? "#115e59" : "transparent"}
                           strokeWidth={selectedDateKey === entry.dateKey ? 2 : 0}
@@ -609,7 +525,8 @@ function ActivityDetailContent() {
               <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mode Tampil</p>
-                  <p className="mt-2 text-lg font-bold text-slate-800">{detailMode === "day" ? "Detail Harian" : "Akumulasi Rentang"}</p>
+                  <p className="mt-2 text-lg font-bold text-slate-800">Detail Harian</p>
+                  <p className="mt-1 text-xs text-slate-500">Tidak ada penilaian hidrasi gabungan rentang.</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal / Rentang Aktif</p>
@@ -633,7 +550,7 @@ function ActivityDetailContent() {
                   <Droplets size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-800">{detailMode === "day" ? "Riwayat Log Harian" : "Riwayat Log Rentang"}</h3>
+                  <h3 className="font-bold text-slate-800">Riwayat Log Harian</h3>
                   <p className="text-xs text-slate-500">
                     {detailTitle} • {detailLogs.length} catatan minum
                   </p>
@@ -645,7 +562,7 @@ function ActivityDetailContent() {
                 <input aria-label="Cari riwayat minum" placeholder="Cari minuman, pengisi, peran, atau volume..." value={logSearch} onChange={(event) => { setLogSearch(event.target.value); setLogPage(1); }} className="mb-3 w-full rounded-lg border p-3 text-sm" />
                 {detailLogs.length === 0 ? (
                   <p className="text-sm text-center text-slate-400 py-8">
-                    {detailMode === "day" ? "Belum ada riwayat minum pada tanggal ini." : "Belum ada riwayat minum pada rentang ini."}
+                    Belum ada riwayat minum pada tanggal ini.
                   </p>
                 ) : (
                   <div className="space-y-1">
@@ -682,16 +599,40 @@ function ActivityDetailContent() {
           </Card>
         </div>
 
+        <Card className="border-0 shadow-md">
+          <CardContent className="p-0">
+            <div className="space-y-3 p-6">
+              <h3 className="text-lg font-bold text-slate-800">Ringkasan Aktivitas per Hari</h3>
+              <p className="text-sm text-slate-500">{rangeLabel}. Setiap tanggal menggunakan aktivitas dan Total Kebutuhan pada hari tersebut. Pilih Lihat Harian untuk membuka rinciannya.</p>
+              <input aria-label="Cari ringkasan harian" placeholder="Cari tanggal, aktivitas, atau status..." value={dailySearch} onChange={(event) => { setDailySearch(event.target.value); setDailyPage(1); }} className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+            </div>
+            <div tabIndex={0} aria-label="Ringkasan hidrasi per tanggal" className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr>{["Tanggal", "Aktivitas", "Asupan", "Total Kebutuhan", "Jumlah Catatan", "Status Harian", "Detail"].map((title) => <th key={title} className="whitespace-nowrap px-4 py-3">{title}</th>)}</tr></thead>
+                <tbody>
+                  {!searchedDays.length && <tr><td colSpan={7} className="p-6 text-center text-slate-500">{rangeError || "Tidak ada tanggal yang sesuai pencarian."}</td></tr>}
+                  {searchedDays.slice((safeDailyPage - 1) * 10, safeDailyPage * 10).map((day) => <tr key={day.dateKey} className={`border-t border-slate-100 ${selectedDateKey === day.dateKey ? "bg-blue-50" : "bg-white"}`}>
+                    <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-800">{day.fullDateLabel}</td>
+                    <td className="px-4 py-3 capitalize">{day.activityLevel}<span className="block text-xs normal-case text-slate-500">{day.isEstimated ? "Perkiraan" : "Tersimpan"}</span></td>
+                    <td className="whitespace-nowrap px-4 py-3">{day.volume} ml</td><td className="whitespace-nowrap px-4 py-3">{day.requiredMl} ml</td><td className="px-4 py-3">{day.logs.length}</td>
+                    <td className="px-4 py-3"><span className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold ${day.status.className}`}>{day.status.label}</span></td>
+                    <td className="px-4 py-3"><button type="button" aria-label={`Lihat harian ${day.dateKey}`} onClick={() => { setSelectedDateKey(day.dateKey); setLogPage(1); document.getElementById("detail-hidrasi-harian")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} className="whitespace-nowrap rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">Lihat Harian</button></td>
+                  </tr>)}
+                </tbody>
+              </table>
+            </div>
+            <Pagination page={dailyPage} total={searchedDays.length} onChange={setDailyPage} />
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <Card className="border-0 shadow-md">
             <CardContent className="p-6">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div>
-                  <h3 className="font-bold text-slate-800 text-lg">Akumulasi per Waktu</h3>
+                  <h3 className="font-bold text-slate-800 text-lg">Distribusi Waktu pada Hari Pilihan</h3>
                   <p className="text-sm text-slate-500 mt-1">
-                    {detailMode === "day"
-                      ? `Distribusi catatan minum siswa pada ${selectedDateLabel.toLowerCase()}.`
-                      : `Distribusi catatan minum siswa pada ${rangeLabel.toLowerCase()}.`}
+                    Distribusi catatan minum siswa pada {selectedDateLabel.toLowerCase()}.
                   </p>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${detailAdequacy.className}`}>
@@ -716,7 +657,7 @@ function ActivityDetailContent() {
             <CardContent className="p-6">
               <h3 className="font-bold text-slate-800 text-lg">Koreksi Otomatis Isian Siswa</h3>
               <p className="text-sm text-slate-500 mt-1">
-                Ringkasan ini dibuat dari {detailMode === "day" ? `log pada ${selectedDateLabel.toLowerCase()}` : `akumulasi ${rangeLabel.toLowerCase()}`}, termasuk total volume, waktu isi, dan jenis minuman.
+                Ringkasan ini dibuat hanya dari catatan pada {selectedDateLabel.toLowerCase()}, termasuk total volume, waktu isi, dan jenis minuman. Catatan hari lain tidak ikut menentukan status hari ini.
               </p>
               <div className="mt-4 space-y-3">
                 {detailCorrections.map((note) => (

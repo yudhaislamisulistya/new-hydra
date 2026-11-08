@@ -10,7 +10,8 @@
     "lint": "eslint",
     "test:logbook-excel": "node scripts/test-logbook-excel.cjs",
     "test:evaluation-excel": "node scripts/test-evaluation-excel.cjs",
-    "test:november-revisions": "node scripts/test-november-revisions.cjs"
+    "test:november-revisions": "node scripts/test-november-revisions.cjs",
+    "test:hydration-range": "node scripts/test-hydration-range.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",

@@ -96,6 +96,18 @@ Pengujian tambahan:
     npm run test:november-revisions
     docker exec -i hydra_postgres_db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < database/tests/daily_activity_and_evaluation_corrections.sql
 
+### Rentang aktivitas dengan pembacaan harian
+
+Detail Aktivitas Minum mendukung satu hari, 7/14/30 hari terakhir, dan rentang
+khusus maksimal 90 hari. Grafik dan tabel tetap satu data per tanggal, termasuk
+tanggal tanpa catatan. Aktivitas, Total Kebutuhan, serta status setiap hari
+dihitung terpisah; total volume rentang bukan status hidrasi gabungan.
+Pilih tanggal pada tabel/dropdown untuk membaca detail dan koreksi hari itu.
+Ekspor ringkasan CSV/PDF juga mempertahankan pembacaan per hari; ekspor catatan
+rentang tetap memuat seluruh entri pada rentang tersebut. Tidak ada migrasi baru.
+
+    npm run test:hydration-range
+
 database/auth-data.sql contains password hashes and is excluded from Git.
 The pre-migration volume new-hydra_hydra_postgres_data and a validated backup
 in /home/new-hydra-backups are retained for rollback. Do not delete them until
