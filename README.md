@@ -115,6 +115,29 @@ ditandai sebagai perkiraan; tanggal tanpa asupan tidak dinilai sebagai di bawah
 target. Menu Isi Logbook tidak ditampilkan pada orang tua maupun guru. Menu siswa
 dan admin tetap tersedia; perubahan menu ini tidak mengubah hak akses API.
 
+### Menyembunyikan hasil isian lama tanpa menghapusnya
+
+Migrasi berikut **mengarsipkan seluruh catatan asupan dan hasil evaluasi yang sudah
+ada saat pertama dijalankan**, termasuk isian pada tanggal hari ini. Cadangkan
+database terlebih dahulu. Akun, soal, sekolah, dan pilihan aktivitas harian tetap
+utuh. Pengisian setelah pengarsipan tetap tampil, termasuk isian bertanggal lampau.
+
+    docker exec -i hydra_postgres_db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < database/migrations/20261108_hide_existing_entries.sql
+    docker exec -i hydra_postgres_db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < database/tests/archived_entries.sql
+
+`archived_at` menandai arsip pada tabel asli. Kebijakan RLS membatasi seluruh
+pembacaan aplikasi (termasuk admin, dashboard, profil, riwayat, CSV, XLSX, dan PDF)
+ke data aktif. Hasil kuis/asupan arsip tidak menyumbang XP; catatan kehadiran tetap
+dipertahankan. RPC isi ulang/hapus hanya menyentuh data aktif, bukan arsip.
+ID impor Excel memakai namespace baru agar tidak bertabrakan dengan entri arsip;
+unggahan berulang pada data aktif tetap diabaikan dengan aman.
+
+Penanda sekali-jalan disimpan di `hydra_private.data_archives`. Menjalankan ulang
+migrasi ini tidak mengarsipkan pengisian baru. Jalankan setelah seluruh migrasi
+sebelumnya; jika `local-security.sql` atau migrasi lama dijalankan ulang, terapkan
+migrasi ini kembali sesudahnya. Arsip hanya dapat dipulihkan lewat administrator
+database, bukan melalui akun admin aplikasi. Muat ulang web setelah deploy.
+
 database/auth-data.sql contains password hashes and is excluded from Git.
 The pre-migration volume new-hydra_hydra_postgres_data and a validated backup
 in /home/new-hydra-backups are retained for rollback. Do not delete them until

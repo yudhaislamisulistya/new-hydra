@@ -42,6 +42,11 @@ async function check() {
   assert.equal(payload[0].id, retry[1].id);
   assert.notEqual(payload[0].id, payload[1].id);
   assert.deepEqual(Object.keys(payload[0]), ["id", "student_id", "amount_ml", "drink_type", "logged_at"]);
+  const oldHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([
+    "hydra-logbook-v1", valid.rows[0].student_id, valid.rows[0].logged_at, valid.rows[0].drink_type, valid.rows[0].amount_ml,
+  ])))).slice(0, 16);
+  oldHash[6] = (oldHash[6] & 0x0f) | 0x80; oldHash[8] = (oldHash[8] & 0x3f) | 0x80;
+  assert.notEqual(payload[0].id.replaceAll("-", ""), Array.from(oldHash, byte => byte.toString(16).padStart(2, "0")).join(""));
 
   const limited = await parseLogbookExcel(toArrayBuffer(await book.xlsx.writeBuffer()), [students[0]], today);
   assert.equal(limited.errors.length, 1);

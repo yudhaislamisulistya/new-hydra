@@ -163,8 +163,8 @@ export async function parseLogbookExcel(buffer: ArrayBuffer, students: ImportStu
 
 export async function buildImportPayload(rows: ImportLog[]) {
   return Promise.all(rows.map(async (row) => {
-    // Content-based UUIDs make retrying the same import safe without overwriting corrections.
-    const content = JSON.stringify(["hydra-logbook-v1", row.student_id, row.logged_at, row.drink_type, row.amount_ml]);
+    // A new namespace separates new imports from retained pre-archive IDs; retries stay idempotent.
+    const content = JSON.stringify(["hydra-logbook-v2-20261108", row.student_id, row.logged_at, row.drink_type, row.amount_ml]);
     const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content))).slice(0, 16);
     hash[6] = (hash[6] & 0x0f) | 0x80;
     hash[8] = (hash[8] & 0x3f) | 0x80;
