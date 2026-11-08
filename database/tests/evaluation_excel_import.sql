@@ -35,20 +35,20 @@ DECLARE
   invalid_entry jsonb;
   result jsonb;
 BEGIN
-  IF has_function_privilege('anon', 'public.submit_student_evaluations(jsonb)', 'EXECUTE') THEN RAISE EXCEPTION 'Anonymous execute was granted'; END IF;
+  IF has_function_privilege('anon', 'public.submit_student_evaluations(jsonb,boolean)', 'EXECUTE') THEN RAISE EXCEPTION 'Anonymous execute was granted'; END IF;
   FOR actor IN SELECT * FROM evaluation_actors WHERE kind <> 'other_student' LOOP
     day := day + 10;
     PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', actor.id, 'role', 'authenticated')::text, true);
     entry := jsonb_build_object('student_id', child, 'survey_id', survey, 'response_date', day,
       'answers', jsonb_build_object(question::text, jsonb_build_object('question_text', 'Soal uji', 'answer', 'Setuju')));
     result := public.submit_student_evaluations(jsonb_build_array(entry, entry || jsonb_build_object('response_date', day + 1)));
-    IF result <> '{"added":2,"skipped":0}'::jsonb THEN RAISE EXCEPTION 'Bulk submit failed for %: %', actor.kind, result; END IF;
+    IF result->>'added' <> '2' OR result->>'skipped' <> '0' THEN RAISE EXCEPTION 'Bulk submit failed for %: %', actor.kind, result; END IF;
     IF (SELECT count(*) FROM public.survey_responses WHERE survey_id = survey AND response_date IN (day, day + 1) AND student_id = child AND respondent_id = actor.id) <> 2 THEN
       RAISE EXCEPTION 'Student or actor attribution failed';
     END IF;
     PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', parent, 'role', 'authenticated')::text, true);
     result := public.submit_student_evaluations(jsonb_build_array(jsonb_set(entry, ARRAY['answers',question::text,'answer'], '"Tidak Setuju"')));
-    IF result <> '{"added":0,"skipped":1}'::jsonb THEN RAISE EXCEPTION 'Retry was not skipped'; END IF;
+    IF result->>'added' <> '0' OR result->>'skipped' <> '1' THEN RAISE EXCEPTION 'Retry was not skipped'; END IF;
     IF NOT EXISTS (SELECT 1 FROM public.survey_responses WHERE student_id = child AND survey_id = survey AND response_date = day AND respondent_id = actor.id AND answers->question::text->>'answer' = 'Setuju') THEN
       RAISE EXCEPTION 'Retry overwrote original actor or answers';
     END IF;

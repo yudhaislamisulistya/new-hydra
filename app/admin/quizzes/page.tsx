@@ -1,4 +1,5 @@
 "use client";
+import { userError } from "../../../utils/indonesian";
 
 import { useEffect, useState } from "react";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
@@ -98,7 +99,7 @@ export default function AdminQuizzesPage() {
       }
     } catch (error: unknown) {
       console.error("Error creating survey:", error);
-      alert(`Gagal membuat kuis: ${error instanceof Error ? error.message : "Terjadi kesalahan."}`);
+      alert(`Gagal membuat kuis: ${userError(error, "Terjadi kesalahan.")}`);
     } finally {
       setIsSubmitting(false);
     }

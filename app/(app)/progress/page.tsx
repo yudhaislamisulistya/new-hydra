@@ -7,6 +7,7 @@ import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
 import { useRouter } from "next/navigation";
 import { calculateStudentFluidTarget, formatLocalDateKey } from "../../../utils/hydrationCalc";
+import { activityFor, loadDailyActivities, type ActivityMap } from "../../../utils/dailyActivity";
 import { 
   Droplet, 
   ClipboardList, 
@@ -70,6 +71,8 @@ export default function ProgressPage() {
   const [customDates, setCustomDates] = useState({ start: "", end: "" });
   
   const [hydrationLogs, setHydrationLogs] = useState<HydrationProgressLog[]>([]);
+  const [activities, setActivities] = useState<ActivityMap>({});
+  const [activityError, setActivityError] = useState("");
   const [surveyResponses, setSurveyResponses] = useState<SurveyProgressResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -133,6 +136,7 @@ export default function ProgressPage() {
       // Fetch Surveys
       const startDateKey = formatLocalDateKey(startDate);
       const endDateKey = formatLocalDateKey(endDate);
+      setActivities(await loadDailyActivities([selectedChildId], startDateKey, endDateKey));
       const { data: surveys } = await supabase
         .from('survey_responses')
         .select('id, response_date, surveys(title, survey_type)')
@@ -146,7 +150,7 @@ export default function ProgressPage() {
       setLoading(false);
     }
 
-    if (selectedChildId) fetchData();
+    if (selectedChildId) void fetchData().catch(() => { setActivityError("Perkembangan atau aktivitas harian gagal dimuat. Silakan muat ulang halaman."); setLoading(false); });
   }, [selectedChildId, timeRange, customDates]);
 
   // Aggregate data for chart
@@ -210,8 +214,8 @@ export default function ProgressPage() {
     const total = hydrationLogs.reduce((sum, l) => sum + l.amount_ml, 0);
     const avg = chartData.length > 0 ? Math.round(total / chartData.length) : 0;
     const child = children.find(c => c.child_id === selectedChildId);
-    const target = calculateStudentFluidTarget(child?.student_profiles);
-    const goalsReached = chartData.filter(d => d.amount >= target).length;
+    const target = chartData.length ? Math.round(chartData.reduce((sum, day) => sum + calculateStudentFluidTarget(child?.student_profiles, activityFor(activities, selectedChildId, day.date)), 0) / chartData.length) : calculateStudentFluidTarget(child?.student_profiles);
+    const goalsReached = chartData.filter(d => d.amount >= calculateStudentFluidTarget(child?.student_profiles, activityFor(activities, selectedChildId, d.date))).length;
     
     return {
       total,
@@ -220,7 +224,7 @@ export default function ProgressPage() {
       goalsReached,
       surveyCount: surveyResponses.length
     };
-  }, [hydrationLogs, chartData, children, selectedChildId, surveyResponses]);
+  }, [hydrationLogs, chartData, children, selectedChildId, surveyResponses, activities]);
 
   if (profile?.role !== 'parent') {
     return (
@@ -235,6 +239,7 @@ export default function ProgressPage() {
     <>
       <Header title="Rincian Perkembangan Anak" />
       <div className="p-6 space-y-6 pb-28">
+        {activityError && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{activityError}</p>}
         
         {/* Top Selection Area */}
         <div className="space-y-4">

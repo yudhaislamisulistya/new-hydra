@@ -1,4 +1,5 @@
 "use client";
+import { userError } from "../../../utils/indonesian";
 
 import { useEffect, useMemo, useState } from "react";
 import { useUserStore } from "../../../store/useUserStore";
@@ -16,6 +17,7 @@ import { getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { BANYUMAS_UMK_2026, BANYUMAS_UMK_2026_LABEL, classifyParentIncome, formatCurrencyId, getParentEducationLabel, getParentGenderLabel } from "../../../utils/parentProfile";
 import { buildCheckinStats, getCheckinReward, MAX_STREAK_BONUS_DAYS } from "../../../utils/gamification";
 import { getNotificationErrorMessage, sendChildNotification } from "../../../utils/notifications";
+import { activityFor, loadDailyActivities, type ActivityMap } from "../../../utils/dailyActivity";
 
 const USAGE_VIDEO_URLS = {
   student: "https://youtu.be/hkz8IqdRJNQ",
@@ -218,8 +220,17 @@ export default function DashboardPage() {
     : "Ayo catat aktivitas harian kamu, jenis minuman dan jumlahnya, lalu lihat hasil keseimbangan cairan tubuh kamu.";
   const today = formatLocalDateKey(new Date());
   const { records, fetchLogs } = useHydrationStore();
-  // Aktivitas (FA) sekarang diisi di menu "Ayo Catat". Dashboard memakai default sedang untuk ringkasan.
-  const activityLevel: ActivityLevel = "sedang";
+  const [activities, setActivities] = useState<ActivityMap>({});
+  const [activityError, setActivityError] = useState("");
+  const [activityReady, setActivityReady] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (!profile?.id) return;
+    loadDailyActivities(null, today).then((map) => { if (active) { setActivities(map); setActivityReady(true); } })
+      .catch(() => { if (active) setActivityError("Aktivitas harian belum dapat dimuat. Muat ulang halaman untuk memastikan ringkasan sesuai pilihan terakhir."); });
+    return () => { active = false; };
+  }, [profile?.id, today]);
+  const activityLevel: ActivityLevel = activityFor(activities, profile?.id || "", today);
 
   // Calculate the correct daily target using FBB × FG + FA
   const dailyTarget = profile?.role === "student"
@@ -227,12 +238,12 @@ export default function DashboardPage() {
     : 1500;
 
   useEffect(() => {
-    if (profile?.id && profile?.role === "student") {
-      fetchLogs(profile.id, dailyTarget);
+    if (profile?.id && profile?.role === "student" && activityReady) {
+      fetchLogs(profile.id, dailyTarget, activityLevel);
     }
-  }, [profile, activityLevel, fetchLogs, dailyTarget]);
+  }, [profile, activityLevel, fetchLogs, dailyTarget, activityReady]);
 
-  const todayRecord = records[today];
+  const todayRecord = records[today]?.student_id === profile?.id ? records[today] : undefined;
   const totalIntake = todayRecord?.total_intake_ml || 0;
   const adequacyStatus = getAdequacyStatus(totalIntake, dailyTarget);
   const savedBuddyColor = profile?.id && profile.role === "student" && typeof window !== "undefined"
@@ -274,7 +285,7 @@ export default function DashboardPage() {
       if (error) {
         console.error("Error fetching daily checkins:", error);
         setStudentCheckins([]);
-        setCheckinError("Fitur check-in harian belum aktif. Jalankan tabel daily_checkins terlebih dahulu.");
+        setCheckinError("Fitur catatan harian belum aktif. Jalankan tabel daily_checkins terlebih dahulu.");
       } else {
         setStudentCheckins((data as DailyCheckinRow[] | null) || []);
         setCheckinError("");
@@ -370,7 +381,7 @@ export default function DashboardPage() {
       }, {});
 
       const nextMap = children.reduce<Record<string, ChildDailyHydrationStatus>>((acc, child) => {
-        const targetMl = calculateStudentFluidTarget(child.student_profiles);
+        const targetMl = calculateStudentFluidTarget(child.student_profiles, activityFor(activities, child.child_id, today));
         const totalIntakeMl = totals[child.child_id] || 0;
         const remainingMl = Math.max(targetMl - totalIntakeMl, 0);
         acc[child.child_id] = {
@@ -387,7 +398,7 @@ export default function DashboardPage() {
     }
 
     void fetchChildrenHydration();
-  }, [children, profile?.role]);
+  }, [children, profile?.role, activities, today]);
 
   useEffect(() => {
     async function fetchTeacherStudents() {
@@ -466,7 +477,7 @@ export default function DashboardPage() {
       }, {});
 
       const nextMap = teacherStudents.reduce<Record<string, ChildDailyHydrationStatus>>((acc, student) => {
-        const targetMl = calculateStudentFluidTarget(student);
+        const targetMl = calculateStudentFluidTarget(student, activityFor(activities, student.id, today));
         const totalIntakeMl = totals[student.id] || 0;
         const remainingMl = Math.max(targetMl - totalIntakeMl, 0);
 
@@ -486,7 +497,7 @@ export default function DashboardPage() {
     }
 
     void fetchTeacherHydration();
-  }, [teacherStudents, profile?.role]);
+  }, [teacherStudents, profile?.role, activities, today]);
 
   const handleAddChild = async () => {
     if (!childCode.trim() || !profile?.id) return;
@@ -517,7 +528,7 @@ export default function DashboardPage() {
         .eq('parent_id', profile.id);
       setChildren(normalizeChildLinks((data as ChildLinkQueryRow[] | null) || null));
     } catch (err: unknown) {
-      setChildError(err instanceof Error ? err.message : 'Terjadi kesalahan saat menambahkan anak.');
+      setChildError(userError(err, 'Terjadi kesalahan saat menambahkan anak.'));
     } finally {
       setAddingChild(false);
     }
@@ -560,7 +571,7 @@ export default function DashboardPage() {
     const customFeedback = feedbackDrafts[childId]?.trim();
 
     if (!childStatus || childStatus.isAdequate) {
-      alert("Feedback harian hanya dikirim saat target minum anak belum tercapai.");
+      alert("Umpan Balik harian hanya dikirim saat target minum anak belum tercapai.");
       return;
     }
 
@@ -572,12 +583,12 @@ export default function DashboardPage() {
       await sendChildNotification({
         child_id: childId,
         sender_parent_id: profile.id,
-        title: "Feedback Hidrasi Harian",
+        title: "Umpan Balik Hidrasi Harian",
         message: `${feedbackMessage} Saat ini baru ${childStatus.totalIntakeMl} ml dari target ${childStatus.targetMl} ml.`,
         type: "feedback",
       });
 
-      alert(`Feedback harian berhasil dikirim ke ${childName}.`);
+      alert(`Umpan Balik harian berhasil dikirim ke ${childName}.`);
       setFeedbackDrafts((current) => ({ ...current, [childId]: "" }));
       setActiveFeedbackChildId(null);
       window.dispatchEvent(new Event("notifications-updated"));
@@ -638,10 +649,10 @@ export default function DashboardPage() {
       if (error) throw error;
 
       setStudentCheckins((current) => [{ checkin_date: today, xp_earned: reward.totalXp }, ...current]);
-      alert(`Check-in harian berhasil. Kamu mendapatkan ${reward.totalXp} XP dengan streak ${reward.streakAfterCheckin} hari.`);
+      alert(`Catatan harian berhasil. Kamu mendapatkan ${reward.totalXp} XP dengan prestasi ${reward.streakAfterCheckin} hari.`);
     } catch (error) {
       console.error("Error saving daily checkin:", error);
-      setCheckinError(error instanceof Error ? error.message : "Gagal menyimpan check-in harian.");
+      setCheckinError(userError(error, "Gagal menyimpan catatan harian."));
     } finally {
       setCheckinSaving(false);
     }
@@ -653,6 +664,8 @@ export default function DashboardPage() {
     }
     setShowDailyGuideModal(false);
   };
+
+  if (!activityReady) return <><Header title="Halaman Utama" /><p role="status" className="p-6 text-sm text-slate-600">{activityError || "Memuat aktivitas dan ringkasan harian..."}</p></>;
 
   if (profile?.role === "teacher") {
     return (
@@ -666,7 +679,7 @@ export default function DashboardPage() {
                   <p className="text-violet-100 text-sm font-medium">Akun Guru Aktif</p>
                   <h2 className="mt-2 text-2xl font-extrabold">{profile.nickname}</h2>
                   <p className="mt-2 text-sm text-violet-100">
-                    Data guru sudah terhubung ke sekolah dan sudah tercatat sebagai role guru di aplikasi.
+                    Data guru sudah terhubung ke sekolah dan sudah tercatat sebagai peran guru di aplikasi.
                   </p>
                   <Link
                     href="/tracker"
@@ -744,8 +757,8 @@ export default function DashboardPage() {
                   {teacherStudents.slice(0, teacherVisibleCount).map((student) => {
                     const studentStatus = teacherHydrationMap[student.id] || {
                       totalIntakeMl: 0,
-                      targetMl: calculateStudentFluidTarget(student),
-                      remainingMl: calculateStudentFluidTarget(student),
+                      targetMl: calculateStudentFluidTarget(student, activityFor(activities, student.id, today)),
+                      remainingMl: calculateStudentFluidTarget(student, activityFor(activities, student.id, today)),
                       isAdequate: false,
                       progressPercent: 0,
                     };
@@ -761,14 +774,14 @@ export default function DashboardPage() {
                             <p className="truncate text-sm font-bold text-slate-800">
                               {studentName}
                             </p>
-                            <p className="mt-1 text-xs text-slate-500">Progress minum hari ini</p>
+                            <p className="mt-1 text-xs text-slate-500">Progres minum hari ini</p>
                           </div>
                         </div>
 
                         <div className="rounded-2xl bg-white p-3 border border-slate-200">
                           <div className="flex items-center justify-between gap-3">
                             <div>
-                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Progress Hari Ini</p>
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Progres Hari Ini</p>
                               <p className="mt-1 text-sm font-bold text-slate-800">
                                 {studentStatus.totalIntakeMl} ml / {studentStatus.targetMl} ml
                               </p>
@@ -953,7 +966,7 @@ export default function DashboardPage() {
                             <p className="font-bold text-slate-800 text-sm">{c.student_profiles?.profiles?.full_name || 'Siswa'}</p>
                             <p className="text-[10px] text-slate-400 font-mono">Kode: {c.student_profiles?.student_code}</p>
                             <p className="text-[10px] text-slate-500">
-                              BB: {c.student_profiles?.weight_kg || '-'}kg &bull; Total kebutuhan: {calculateStudentFluidTarget(c.student_profiles)}ml
+                              BB: {c.student_profiles?.weight_kg || '-'}kg &bull; Total kebutuhan: {calculateStudentFluidTarget(c.student_profiles, activityFor(activities, c.child_id, today))}ml
                             </p>
                           </div>
                         </div>
@@ -975,8 +988,8 @@ export default function DashboardPage() {
                       {(() => {
                         const childStatus = childHydrationMap[c.child_id] || {
                           totalIntakeMl: 0,
-                          targetMl: calculateStudentFluidTarget(c.student_profiles),
-                          remainingMl: calculateStudentFluidTarget(c.student_profiles),
+                          targetMl: calculateStudentFluidTarget(c.student_profiles, activityFor(activities, c.child_id, today)),
+                          remainingMl: calculateStudentFluidTarget(c.student_profiles, activityFor(activities, c.child_id, today)),
                           isAdequate: false,
                           progressPercent: 0,
                         };
@@ -1009,7 +1022,7 @@ export default function DashboardPage() {
                               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 space-y-3">
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
-                                    <p className="text-sm font-bold text-amber-800">Feedback Harian Orang Tua</p>
+                                    <p className="text-sm font-bold text-amber-800">Umpan Balik Harian Orang Tua</p>
                                     <p className="text-xs text-amber-700 mt-1">
                                       Kirim masukan atau semangat ke {childName} karena target minum hari ini belum tercapai.
                                     </p>
@@ -1020,7 +1033,7 @@ export default function DashboardPage() {
                                     className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-bold text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
                                   >
                                     <MessageSquareText size={14} />
-                                    {activeFeedbackChildId === c.child_id ? "Tutup" : "Beri Feedback"}
+                                    {activeFeedbackChildId === c.child_id ? "Tutup" : "Beri Umpan Balik"}
                                   </button>
                                 </div>
 
@@ -1043,7 +1056,7 @@ export default function DashboardPage() {
                                         className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
                                       >
                                         <SendHorizonal size={14} />
-                                        {sendingFeedbackTo === c.child_id ? "Mengirim..." : "Kirim Feedback"}
+                                        {sendingFeedbackTo === c.child_id ? "Mengirim..." : "Kirim Umpan Balik"}
                                       </button>
                                     </div>
                                   </div>
@@ -1067,6 +1080,7 @@ export default function DashboardPage() {
   return (
     <>
       <Header title="Halo, Teman!" />
+      <p className="px-6 pt-4 text-xs text-blue-700">Aktivitas hari ini: {activityLevel} {activities[`${profile?.id}:${today}`]?.is_estimated === false ? "(tersimpan)" : "(perkiraan; pilih aktivitas sebenarnya di Ayo Catat)"}.</p>
       <div className="p-6 space-y-6">
         {showDailyGuideModal && (
           <div className="fixed inset-y-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 flex items-center justify-center bg-slate-950/55 px-4">

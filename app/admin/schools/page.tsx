@@ -1,4 +1,5 @@
 "use client";
+import { userError } from "../../../utils/indonesian";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
@@ -10,6 +11,9 @@ import { createClient } from "../../../utils/api/client";
 import { buildHydrationPeriodSummaries, getAdequacyStatus } from "../../../utils/hydrationInsights";
 import { getUserRoleLabel } from "../../../utils/authIdentity";
 import { calculateStudentFluidTarget } from "../../../utils/hydrationCalc";
+import { formatLocalDateKey } from "../../../utils/hydrationCalc";
+import { activityFor, loadDailyActivities } from "../../../utils/dailyActivity";
+import { Pagination } from "../../../components/ui/Pagination";
 
 type SchoolRecord = {
   id: string;
@@ -112,6 +116,11 @@ export default function AdminSchoolsPage() {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [studentsError, setStudentsError] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
+  const [studentPage, setStudentPage] = useState(1);
+  const [schoolSearch, setSchoolSearch] = useState("");
+  const [schoolPage, setSchoolPage] = useState(1);
+  const filteredSchools = schools.filter((school) => [school.name, school.address, school.city, school.province, school.contact_person, school.phone].some((value) => (value || "").toLocaleLowerCase("id-ID").includes(schoolSearch.trim().toLocaleLowerCase("id-ID"))));
+  const safeSchoolPage = Math.min(schoolPage, Math.max(1, Math.ceil(filteredSchools.length / 10)));
 
   const fetchSchools = useCallback(async () => {
     setLoading(true);
@@ -128,7 +137,7 @@ export default function AdminSchoolsPage() {
       if (error.code === "42P01") {
         setSchemaError("Tabel `schools` belum tersedia. Jalankan SQL schema sekolah terlebih dahulu agar fitur ini aktif.");
       } else {
-        setSchemaError(`Gagal memuat data sekolah: ${error.message}`);
+        setSchemaError(`Gagal memuat data sekolah: ${userError(error)}`);
       }
       setSchools([]);
       setLoading(false);
@@ -218,7 +227,7 @@ export default function AdminSchoolsPage() {
       setIsCreateOpen(false);
       resetForm();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan saat menambah sekolah.";
+      const message = userError(error, "Terjadi kesalahan saat menambah sekolah.");
       alert(`Gagal menambah sekolah: ${message}`);
     } finally {
       setIsSubmitting(false);
@@ -248,7 +257,7 @@ export default function AdminSchoolsPage() {
       setIsEditOpen(false);
       resetForm();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan sekolah.";
+      const message = userError(error, "Terjadi kesalahan saat menyimpan sekolah.");
       alert(`Gagal menyimpan sekolah: ${message}`);
     } finally {
       setIsSubmitting(false);
@@ -268,7 +277,7 @@ export default function AdminSchoolsPage() {
 
       setSchools((currentSchools) => currentSchools.filter((currentSchool) => currentSchool.id !== school.id));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan saat menghapus sekolah.";
+      const message = userError(error, "Terjadi kesalahan saat menghapus sekolah.");
       alert(`Gagal menghapus sekolah: ${message}`);
     } finally {
       setDeletingSchoolId(null);
@@ -352,10 +361,11 @@ export default function AdminSchoolsPage() {
         return accumulator;
       }, {});
 
+      const activities = await loadDailyActivities(studentIds, formatLocalDateKey(new Date()));
       const mappedStudents: SchoolStudentDetail[] = normalizedStudents.map((student) => {
         const studentLogs = logsByStudent[student.id] || [];
         const totalTodayMl = studentLogs.reduce((sum, log) => sum + log.amount_ml, 0);
-        const targetMl = calculateStudentFluidTarget(student);
+        const targetMl = calculateStudentFluidTarget(student, activityFor(activities, student.id, formatLocalDateKey(new Date())));
         const adequacy = getAdequacyStatus(totalTodayMl, targetMl);
 
         return {
@@ -381,7 +391,7 @@ export default function AdminSchoolsPage() {
 
       setSchoolStudents(mappedStudents);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan saat memuat detail siswa.";
+      const message = userError(error, "Terjadi kesalahan saat memuat detail siswa.");
       setStudentsError(message);
       setSchoolStudents([]);
     } finally {
@@ -525,7 +535,7 @@ export default function AdminSchoolsPage() {
   const renderStudentsModal = () => {
     if (!selectedSchool) return null;
 
-    const adequateCount = schoolStudents.filter((student) => student.adequacy_label === "Adekuat").length;
+    const adequateCount = schoolStudents.filter((student) => student.adequacy_label === "Baik").length;
     const notAdequateCount = schoolStudents.length - adequateCount;
 
     const query = studentSearch.trim().toLowerCase();
@@ -588,13 +598,14 @@ export default function AdminSchoolsPage() {
                 <input
                   type="text"
                   value={studentSearch}
-                  onChange={(event) => setStudentSearch(event.target.value)}
+                  onChange={(event) => { setStudentSearch(event.target.value); setStudentPage(1); }}
                   placeholder="Cari siswa berdasarkan nama, kode, atau email..."
                   className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
             )}
 
+            <Pagination page={studentPage} total={filteredStudents.length} onChange={setStudentPage} />
             {loadingStudents ? (
               <div className="py-16 text-center text-slate-400">Memuat detail siswa...</div>
             ) : studentsError ? (
@@ -622,7 +633,7 @@ export default function AdminSchoolsPage() {
               </Card>
             ) : (
               <div className="mt-5 grid gap-4">
-                {filteredStudents.map((student) => {
+                {filteredStudents.slice((Math.min(studentPage, Math.max(1, Math.ceil(filteredStudents.length / 10))) - 1) * 10, Math.min(studentPage, Math.max(1, Math.ceil(filteredStudents.length / 10))) * 10).map((student) => {
                   const progress = student.total_need_ml
                     ? Math.min(100, Math.round((student.total_today_ml / student.total_need_ml) * 100))
                     : 0;
@@ -641,7 +652,7 @@ export default function AdminSchoolsPage() {
 
                             <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                               <div className="rounded-2xl bg-slate-50 p-3">
-                                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Username</p>
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Nama Pengguna</p>
                                 <p className="mt-1 text-sm font-semibold text-slate-700">{student.username || "-"}</p>
                               </div>
                               <div className="rounded-2xl bg-slate-50 p-3">
@@ -678,7 +689,7 @@ export default function AdminSchoolsPage() {
                               </div>
 
                               <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Progress Target</p>
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Progres Target</p>
                                 <p className="mt-2 text-2xl font-extrabold text-slate-800">{progress}%</p>
                                 <div className="mt-3 h-2.5 rounded-full bg-slate-100">
                                   <div
@@ -806,6 +817,8 @@ export default function AdminSchoolsPage() {
 
         <Card className="border-0 shadow-md">
           <CardContent className="p-0">
+            <div className="p-4"><input aria-label="Cari sekolah" placeholder="Cari nama sekolah, alamat, atau kontak..." value={schoolSearch} onChange={(event) => { setSchoolSearch(event.target.value); setSchoolPage(1); }} className="w-full rounded-xl border border-slate-200 p-3" /></div>
+            <Pagination page={schoolPage} total={filteredSchools.length} onChange={setSchoolPage} />
             {loading ? (
               <div className="py-16 text-center text-slate-400">Memuat data sekolah...</div>
             ) : schools.length === 0 ? (
@@ -816,7 +829,7 @@ export default function AdminSchoolsPage() {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {schools.map((school) => (
+                {filteredSchools.slice((safeSchoolPage - 1) * 10, safeSchoolPage * 10).map((school) => (
                   <div key={school.id} className="p-5 hover:bg-slate-50 transition-colors">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1">
@@ -869,7 +882,7 @@ export default function AdminSchoolsPage() {
                           type="button"
                           onClick={() => handleOpenEdit(school)}
                           className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100"
-                          title="Edit sekolah"
+                          title="Sunting sekolah"
                         >
                           <Edit3 size={16} />
                         </button>
@@ -893,7 +906,7 @@ export default function AdminSchoolsPage() {
       </div>
 
       {isCreateOpen && renderModal("Tambah Sekolah", "Simpan Sekolah", handleCreate, handleCloseCreate)}
-      {isEditOpen && renderModal("Edit Sekolah", "Simpan Perubahan", handleUpdate, handleCloseEdit)}
+      {isEditOpen && renderModal("Sunting Sekolah", "Simpan Perubahan", handleUpdate, handleCloseEdit)}
       {isStudentsOpen && renderStudentsModal()}
     </>
   );

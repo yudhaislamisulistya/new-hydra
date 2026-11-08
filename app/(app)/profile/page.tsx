@@ -1,4 +1,5 @@
 "use client";
+import { userError } from "../../../utils/indonesian";
 
 import { useUserStore } from "../../../store/useUserStore";
 import { Header } from "../../../components/layout/Header";
@@ -278,7 +279,7 @@ export default function ProfilePage() {
       setStudentSuccess("Profil siswa berhasil diperbarui.");
       setIsEditingStudent(false);
     } catch (error) {
-      setStudentError(error instanceof Error ? error.message : "Gagal menyimpan profil siswa.");
+      setStudentError(userError(error, "Gagal menyimpan profil siswa."));
     } finally {
       setIsSavingStudent(false);
     }
@@ -317,7 +318,7 @@ export default function ProfilePage() {
     }
 
     if (normalizedUsername.length < 3) {
-      setParentError("Username minimal 3 karakter.");
+      setParentError("Nama Pengguna minimal 3 karakter.");
       return;
     }
 
@@ -355,7 +356,7 @@ export default function ProfilePage() {
 
         if (existingUserError) throw existingUserError;
         if (existingUser) {
-          setParentError("Username sudah dipakai. Silakan gunakan username lain.");
+          setParentError("Nama Pengguna sudah dipakai. Silakan gunakan username lain.");
           setIsSavingParent(false);
           return;
         }
@@ -391,7 +392,7 @@ export default function ProfilePage() {
       setParentSuccess("Profil orang tua berhasil diperbarui.");
       setIsEditingParent(false);
     } catch (error) {
-      setParentError(error instanceof Error ? error.message : "Gagal menyimpan profil orang tua.");
+      setParentError(userError(error, "Gagal menyimpan profil orang tua."));
     } finally {
       setIsSavingParent(false);
     }
@@ -574,7 +575,7 @@ export default function ProfilePage() {
                     <User size={20} />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Username</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Pengguna</p>
                     <p className="font-semibold text-slate-700">@{profile?.username || "-"}</p>
                   </div>
                 </div>
@@ -662,7 +663,7 @@ export default function ProfilePage() {
                 <div>
                   <h3 className="font-bold text-slate-800 text-base">Data Siswa</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Klik Edit Profil untuk memperbarui data. Username, kode siswa, dan target air dasar tetap dikunci.
+                    Klik Sunting Profil untuk memperbarui data. Nama pengguna, kode siswa, dan target air dasar tetap dikunci.
                   </p>
                 </div>
                 {!isEditingStudent ? (
@@ -676,7 +677,7 @@ export default function ProfilePage() {
                     className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100 transition-colors"
                   >
                     <Edit3 size={14} />
-                    Edit Profil
+                    Sunting Profil
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
@@ -720,7 +721,7 @@ export default function ProfilePage() {
                   onChange={(event) => setStudentForm((current) => ({ ...current, fullName: event.target.value }))}
                 />
                 <Input
-                  label="Username"
+                  label="Nama Pengguna"
                   value={`@${profile?.username || ""}`}
                   disabled
                 />
@@ -861,7 +862,7 @@ export default function ProfilePage() {
                   <User size={20} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Username</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nama Pengguna</p>
                   <p className="font-semibold text-slate-700">@{profile?.username || "-"}</p>
                 </div>
               </div>
@@ -934,7 +935,7 @@ export default function ProfilePage() {
             <CardContent className="p-5 space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">Edit Profil Orang Tua</h3>
+                  <h3 className="text-base font-bold text-slate-800">Sunting Profil Orang Tua</h3>
                   <p className="text-sm text-slate-500 mt-1">Perbarui semua data orang tua langsung dari halaman profil.</p>
                 </div>
                 {!isEditingParent ? (
@@ -944,7 +945,7 @@ export default function ProfilePage() {
                     setIsEditingParent(true);
                   }}>
                     <Edit3 size={16} className="mr-2" />
-                    Edit Profil
+                    Sunting Profil
                   </Button>
                 ) : (
                   <div className="flex gap-2">
@@ -982,7 +983,7 @@ export default function ProfilePage() {
                       placeholder="Nama lengkap orang tua"
                     />
                     <Input
-                      label="Username"
+                      label="Nama Pengguna"
                       value={parentForm.username}
                       onChange={(event) => setParentForm({ ...parentForm, username: event.target.value })}
                       placeholder="username"

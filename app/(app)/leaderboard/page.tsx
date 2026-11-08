@@ -204,7 +204,7 @@ export default function LeaderboardPage() {
                           <Droplet size={10} /> {entry.hydrationCount} minum
                         </span>
                         <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-                          <Zap size={10} /> {entry.checkinCount} check-in
+                          <Zap size={10} /> {entry.checkinCount} catatan
                         </span>
                       </div>
                     </div>

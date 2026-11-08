@@ -1,4 +1,6 @@
 "use client";
+import { downloadPersonalData } from "../../../utils/personalDataExcel";
+import { userError } from "../../../utils/indonesian";
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Edit3, GraduationCap, Loader2, Save, School, Trash2, UserRound, X } from "lucide-react";
@@ -107,6 +109,8 @@ export default function AdminUsersPage() {
   const [filterRole, setFilterRole] = useState<"all" | UserRole>("all");
   const [filterStudyGroup, setFilterStudyGroup] = useState<"all" | StudyGroup>("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [editFormData, setEditFormData] = useState<EditFormData>({
@@ -201,6 +205,8 @@ export default function AdminUsersPage() {
         if (filterRole !== "all") {
           query = query.eq("role", filterRole);
         }
+        const keyword = search.trim().replace(/[%_(),.]/g, " ");
+        if (keyword) query = query.or(`full_name.ilike.%${keyword}%,email.ilike.%${keyword}%`);
 
         if (isStudyGroupFiltered) {
           query = query
@@ -287,7 +293,7 @@ export default function AdminUsersPage() {
     return () => {
       isActive = false;
     };
-  }, [currentPage, filterRole, filterStudyGroup, refreshToken]);
+  }, [currentPage, filterRole, filterStudyGroup, refreshToken, search]);
 
   const refreshUsers = () => {
     setLoading(true);
@@ -422,7 +428,7 @@ export default function AdminUsersPage() {
       setEditingUser(null);
       refreshUsers();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan saat menyimpan pengguna.";
+      const message = userError(error, "Terjadi kesalahan saat menyimpan pengguna.");
       alert(`Gagal menyimpan pengguna: ${message}`);
     } finally {
       setIsEditSubmitting(false);
@@ -453,7 +459,7 @@ export default function AdminUsersPage() {
         refreshUsers();
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Terjadi kesalahan saat menghapus pengguna.";
+      const message = userError(error, "Terjadi kesalahan saat menghapus pengguna.");
       alert(`Gagal menghapus pengguna: ${message}`);
       refreshUsers();
     } finally {
@@ -469,6 +475,7 @@ export default function AdminUsersPage() {
           <CardContent className="p-0">
             <div className="p-6 border-b border-slate-100 flex flex-col gap-4 bg-white rounded-t-xl sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-bold text-slate-800">Daftar Pengguna</h2>
+              <button type="button" disabled={exporting} onClick={async () => { if (exporting) return; if (!window.confirm("Unduh data pribadi seluruh siswa dan orang tua yang dapat diakses admin? Simpan file ini dengan aman dan jangan bagikan kepada pihak yang tidak berwenang.")) return; setExporting(true); try { await downloadPersonalData(); } catch (error) { alert(userError(error, "Data pribadi gagal diekspor. Silakan coba lagi.")); } finally { setExporting(false); } }} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{exporting ? "Menyiapkan Excel..." : "Unduh Data Siswa & Orang Tua (.xlsx)"}</button>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <select
                   aria-label="Filter role pengguna"
@@ -497,12 +504,13 @@ export default function AdminUsersPage() {
               </div>
             </div>
 
+            <div className="p-4"><input aria-label="Cari pengguna" placeholder="Cari nama atau surel pengguna..." value={search} onChange={(event) => { setSearch(event.target.value); setCurrentPage(1); }} className="w-full rounded-xl border p-3 text-sm" /></div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left text-slate-500">
                 <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-100">
                   <tr>
                     <th scope="col" className="px-6 py-4">Nama Lengkap</th>
-                    <th scope="col" className="px-6 py-4">Email</th>
+                    <th scope="col" className="px-6 py-4">Surel</th>
                     <th scope="col" className="px-6 py-4">Peran</th>
                     <th scope="col" className="px-6 py-4">Kelompok Program</th>
                     <th scope="col" className="px-6 py-4">Detail Tambahan</th>
@@ -601,8 +609,8 @@ export default function AdminUsersPage() {
                               type="button"
                               onClick={() => handleOpenEdit(user)}
                               className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100"
-                              title="Edit pengguna"
-                              aria-label={`Edit pengguna ${user.full_name || user.email || "tanpa nama"}`}
+                              title="Sunting pengguna"
+                              aria-label={`Sunting pengguna ${user.full_name || user.email || "tanpa nama"}`}
                             >
                               <Edit3 size={16} />
                             </button>
@@ -662,7 +670,7 @@ export default function AdminUsersPage() {
           <div className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 p-5">
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Edit Pengguna</h3>
+                <h3 className="text-lg font-bold text-slate-800">Sunting Pengguna</h3>
                 <p className="text-xs text-slate-500">Perbarui profil aplikasi pengguna.</p>
               </div>
               <button
@@ -688,7 +696,7 @@ export default function AdminUsersPage() {
                     />
                   </label>
                   <label className="space-y-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Email</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Surel</span>
                     <input
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       type="email"

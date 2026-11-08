@@ -9,6 +9,9 @@ import { ArrowLeft, Plus, Trash2, Download, Users, ChevronDown, ChevronUp, Penci
 import Link from "next/link";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { getUserRoleLabel } from "../../../utils/authIdentity";
+import { Pagination } from "../../../components/ui/Pagination";
+import { fetchAllRows } from "../../../utils/dataAccess";
+import { responseDateTime, userError, questionTypeLabel } from "../../../utils/indonesian";
 
 type QuizSurvey = {
   id: string;
@@ -31,6 +34,15 @@ function ManageQuizContent() {
   const [responses, setResponses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
+  const [studentPages, setStudentPages] = useState<Record<string, number>>({});
+  const [editingResponse, setEditingResponse] = useState<string | null>(null);
+  const [responseDraft, setResponseDraft] = useState<Record<string, string>>({});
+  const [responseBusy, setResponseBusy] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [historyError, setHistoryError] = useState("");
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,7 +89,7 @@ function ManageQuizContent() {
         const studentAnswer = answers[q.id]?.answer;
         if (studentAnswer && studentAnswer === q.correct_answer) correct++;
       });
-      const maxScore = questions.length;
+      const maxScore = questions.filter((question) => answers[question.id]).length;
       const percentage = maxScore > 0 ? Math.round((correct / maxScore) * 10000) / 100 : 0;
       return { totalScore: correct, maxScore, percentage, conclusion: percentage >= 70 ? 'Lulus' : 'Perlu Belajar' };
     }
@@ -121,21 +133,13 @@ function ManageQuizContent() {
         setQuestions(questionsData || []);
 
         // Fetch responses for this survey
-        const { data: responsesData, error: responsesError } = await supabase
-          .from('survey_responses')
-          .select('id, respondent_id, student_id, submitted_at, response_date, answers')
-          .eq('survey_id', surveyId)
-          .order('submitted_at', { ascending: false });
-
-        if (responsesError) throw responsesError;
+        const responsesData = await fetchAllRows<{ id: string; respondent_id: string; student_id: string | null; submitted_at: string; response_date: string; answers: Record<string, {question_text: string; answer: string}>; updated_at: string | null }>((from, to) => supabase
+          .from('survey_responses').select('id, respondent_id, student_id, submitted_at, response_date, answers, updated_at')
+          .eq('survey_id', surveyId).order('submitted_at', { ascending: false }).order('id').range(from, to));
 
         // Fetch respondent names
         if (responsesData && responsesData.length > 0) {
-          const respondentIds = [...new Set(responsesData.flatMap(r => [r.respondent_id, r.student_id]).filter(Boolean))];
-          const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('id, full_name, email, role')
-            .in('id', respondentIds);
+          const profilesData = await fetchAllRows<{id: string; full_name: string; email: string; role: string}>((from, to) => supabase.from('profiles').select('id, full_name, email, role').order('id').range(from, to));
 
           const profileMap = (profilesData || []).reduce((acc: any, p: any) => {
             acc[p.id] = p;
@@ -156,13 +160,45 @@ function ManageQuizContent() {
 
       } catch (error) {
         console.error("Error fetching quiz details:", error);
+        setHistoryError(userError(error, "Riwayat evaluasi gagal dimuat. Silakan muat ulang halaman."));
       } finally {
         setLoading(false);
       }
     }
 
     if (surveyId) fetchData();
-  }, [surveyId]);
+  }, [surveyId, revision]);
+
+  const groups = new Map<string, { id: string; name: string; rows: typeof responses }>();
+  responses.forEach((response) => {
+    const id = response.student_id || response.respondent_id;
+    if (!groups.has(id)) groups.set(id, { id, name: response.student_name, rows: [] });
+    groups.get(id)!.rows.push(response);
+  });
+  const studentGroups = [...groups.values()].filter((group) => `${group.name} ${group.rows.map((row) => `${row.respondent_name} ${row.respondent_email} ${row.response_date}`).join(" ")}`.toLocaleLowerCase("id-ID").includes(historySearch.trim().toLocaleLowerCase("id-ID")));
+  const safeHistoryPage = Math.min(historyPage, Math.max(1, Math.ceil(studentGroups.length / 10)));
+  const pageGroups = studentGroups.slice((safeHistoryPage - 1) * 10, safeHistoryPage * 10);
+  const saveResponse = async (response: typeof responses[number]) => {
+    if (responseBusy || !window.confirm("Timpa jawaban pada entri ini dengan koreksi yang Anda isi? Tanggal catatan dan identitas pengisi asli tetap dipertahankan.")) return;
+    setResponseBusy(true); setHistoryError("");
+    try {
+      const answers = Object.fromEntries(questions.filter((question) => survey?.survey_type !== "kuis" || response.answers?.[question.id]).map((question) => [question.id, { question_text: question.question_text, answer: responseDraft[question.id] || "" }]));
+      const { error } = await createClient().rpc("submit_student_evaluations", { overwrite_existing: true, entries: [{ response_id: response.id, student_id: response.student_id || response.respondent_id, survey_id: surveyId, response_date: response.response_date, answers }] });
+      if (error) throw error;
+      setEditingResponse(null); setRevision((value) => value + 1);
+    } catch (error) { setHistoryError(userError(error, "Koreksi jawaban gagal disimpan. Periksa seluruh jawaban dan coba lagi.")); }
+    finally { setResponseBusy(false); }
+  };
+  const deleteResponse = async (id: string) => {
+    if (responseBusy || !window.confirm("Hapus entri jawaban ini? Tindakan ini tidak dapat dibatalkan dan nilai/XP terkait akan dihitung ulang.")) return;
+    setResponseBusy(true); setHistoryError("");
+    try {
+      const { error } = await createClient().rpc("delete_student_evaluation", { response_id_input: id });
+      if (error) throw error;
+      setEditingResponse(null); setRevision((value) => value + 1);
+    } catch (error) { setHistoryError(userError(error, "Jawaban gagal dihapus. Silakan coba lagi.")); }
+    finally { setResponseBusy(false); }
+  };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -227,7 +263,7 @@ function ManageQuizContent() {
       }
     } catch (error: any) {
       console.error("Error adding question:", error);
-      alert(`Gagal menambah pertanyaan: ${error.message}`);
+      alert(`Gagal menambah pertanyaan: ${userError(error)}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -247,7 +283,7 @@ function ManageQuizContent() {
       
       setQuestions(questions.filter(q => q.id !== id));
     } catch (error: any) {
-      alert(`Gagal menghapus: ${error.message}`);
+      alert(`Gagal menghapus: ${userError(error)}`);
     }
   };
 
@@ -262,7 +298,7 @@ function ManageQuizContent() {
       if (error) throw error;
       setQuestions(questions.map(q => q.id === questionId ? { ...q, correct_answer: answer } : q));
     } catch (err: any) {
-      alert(`Gagal menyimpan jawaban benar: ${err.message}`);
+      alert(`Gagal menyimpan jawaban benar: ${userError(err)}`);
     }
   };
 
@@ -305,7 +341,7 @@ function ManageQuizContent() {
       } : current);
       setIsEditModalOpen(false);
     } catch (err: any) {
-      alert(`Gagal menyimpan: ${err.message}`);
+      alert(`Gagal menyimpan: ${userError(err)}`);
     } finally {
       setIsEditSubmitting(false);
     }
@@ -320,7 +356,7 @@ function ManageQuizContent() {
       if (error) throw error;
       router.push('/admin/quizzes');
     } catch (err: any) {
-      alert(`Gagal menghapus: ${err.message}`);
+      alert(`Gagal menghapus: ${userError(err)}`);
     }
   };
 
@@ -345,10 +381,9 @@ function ManageQuizContent() {
 
     const questionHeaders = questions.map((q, i) => `Pertanyaan ${i + 1}: ${q.question_text}`);
     const scoreHeaders = isScoredExport ? ['Skor', 'Skor Maks', 'Persentase (%)', 'Kesimpulan'] : [];
-    const headers = ['No', 'Nama Siswa', 'Nama Pengisi', 'Peran Pengisi', 'Email Pengisi', 'Tanggal Catatan Asupan', 'Waktu Pengisian', ...questionHeaders, ...scoreHeaders];
+    const headers = ['No', 'Nama Siswa', 'Nama Pengisi', 'Peran Pengisi', 'Surel Pengisi', 'Tanggal Catatan Asupan', 'Waktu Pengisian', ...questionHeaders, ...scoreHeaders];
 
     const rows = responses.map((r, idx) => {
-      const date = new Date(r.submitted_at);
       const answerCols = questions.map(q => {
         const ans = r.answers?.[q.id]?.answer || '';
         const suffix = isKuisExport && ans ? (ans === q.correct_answer ? ' [BENAR]' : ' [SALAH]') : '';
@@ -370,7 +405,7 @@ function ManageQuizContent() {
         `"${r.respondent_role}"`,
         `"${r.respondent_email.replace(/"/g, '""')}"`,
         `"${new Date(`${r.response_date}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}"`,
-        `"${date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}"`,
+        `"${responseDateTime(r.response_date, r.submitted_at)}"`,
         ...answerCols,
         ...scoreCols,
       ].join(',');
@@ -450,7 +485,7 @@ function ManageQuizContent() {
                 className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm"
               >
                 <Pencil size={15} />
-                Edit
+                Sunting
               </button>
               <button
                 onClick={() => setIsChartModalOpen(true)}
@@ -514,7 +549,7 @@ function ManageQuizContent() {
                       </button>
                     </div>
                     <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-500 mb-3">
-                      Tipe: {q.question_type.replace('_', ' ')}
+                      Tipe: {questionTypeLabel(q.question_type)}
                     </span>
                     
                     {/* Render Options if any */}
@@ -570,11 +605,14 @@ function ManageQuizContent() {
 
         {/* ── RESPONSE HISTORY SECTION ── */}
         <div className="space-y-4 mt-10">
+          <input aria-label="Cari riwayat evaluasi" placeholder="Cari nama siswa, pengisi, surel, atau tanggal..." value={historySearch} onChange={(event) => { setHistorySearch(event.target.value); setHistoryPage(1); }} className="w-full rounded-xl border p-3 text-sm" />
+          {historyError && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{historyError}</p>}
+          <Pagination page={historyPage} total={studentGroups.length} onChange={setHistoryPage} />
           <div className="flex justify-between items-center border-b border-slate-200 pb-3">
             <div className="flex items-center gap-3">
               <Users size={20} className="text-slate-600" />
               <h3 className="font-bold text-slate-800 text-lg">
-                Riwayat Pengisian ({responses.length})
+                Riwayat Pengisian ({responses.length}) · {groups.size} siswa
               </h3>
             </div>
             {responses.length > 0 && (
@@ -583,7 +621,7 @@ function ManageQuizContent() {
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
               >
                 <Download size={16} />
-                Export CSV
+                Ekspor CSV
               </button>
             )}
           </div>
@@ -595,8 +633,11 @@ function ManageQuizContent() {
             </div>
           ) : (
             <div className="space-y-3">
-              {responses.map((r, idx) => {
-                const date = new Date(r.submitted_at);
+              {pageGroups.map((group) => <section key={group.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                <button type="button" onClick={() => setExpandedStudent(expandedStudent === group.id ? null : group.id)} className="flex w-full items-center justify-between p-3 text-left font-bold text-slate-800"><span>{group.name} · {group.rows.length} pengisian</span><span>{expandedStudent === group.id ? "Tutup" : "Lihat Riwayat"}</span></button>
+                {expandedStudent === group.id && <div className="space-y-3">
+                  <Pagination page={studentPages[group.id] || 1} total={group.rows.length} onChange={(page) => setStudentPages((pages) => ({ ...pages, [group.id]: page }))} />
+                  {group.rows.slice((Math.min(studentPages[group.id] || 1, Math.max(1, Math.ceil(group.rows.length / 10))) - 1) * 10, Math.min(studentPages[group.id] || 1, Math.max(1, Math.ceil(group.rows.length / 10))) * 10).map((r, idx) => {
                 const responseDate = new Date(`${r.response_date}T00:00:00`);
                 const isExpanded = expandedId === r.id;
 
@@ -639,7 +680,7 @@ function ManageQuizContent() {
                             {responseDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </div>
                           <div className="text-xs text-slate-400">
-                            Diisi {date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}, {date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            Waktu catatan: {responseDateTime(r.response_date, r.submitted_at)}{r.updated_at ? " · Sudah dikoreksi" : ""}
                           </div>
                         </div>
                         {isExpanded ? (
@@ -652,9 +693,14 @@ function ManageQuizContent() {
 
                     {isExpanded && (
                       <div className="border-t border-slate-100 bg-slate-50 p-5 space-y-3">
+                        <div className="flex flex-wrap gap-2">
+                          {editingResponse === r.id ? <><button type="button" disabled={responseBusy} onClick={() => void saveResponse(r)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white">{responseBusy ? "Menyimpan..." : "Simpan & Timpa Jawaban"}</button><button type="button" disabled={responseBusy} onClick={() => setEditingResponse(null)} className="rounded-lg border px-3 py-2 text-sm">Batal</button></> : <button type="button" disabled={responseBusy} onClick={() => { setEditingResponse(r.id); setResponseDraft(Object.fromEntries(questions.map((question) => [question.id, r.answers?.[question.id]?.answer || ""]))); }} className="rounded-lg border border-blue-200 px-3 py-2 text-sm font-bold text-blue-700">Sunting Jawaban</button>}
+                          <button type="button" disabled={responseBusy} onClick={() => void deleteResponse(r.id)} className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">Hapus Entri</button>
+                        </div>
+                        {editingResponse === r.id && <div className="space-y-3">{questions.filter((question) => survey.survey_type !== 'kuis' || r.answers?.[question.id]).map((question) => <label key={question.id} className="block text-sm font-semibold text-slate-700">{question.question_text}{question.question_type === "text" ? <textarea value={responseDraft[question.id] || ""} onChange={(event) => setResponseDraft((draft) => ({ ...draft, [question.id]: event.target.value }))} className="mt-2 block w-full rounded-lg border p-3" /> : <select value={responseDraft[question.id] || ""} onChange={(event) => setResponseDraft((draft) => ({ ...draft, [question.id]: event.target.value }))} className="mt-2 block w-full rounded-lg border p-3"><option value="">Pilih jawaban...</option>{(question.options || []).map((option: string) => <option key={option} value={option}>{option}</option>)}</select>}</label>)}</div>}
                         {r.answers && typeof r.answers === 'object' ? (
                           <>
-                            {questions.map((q, qIdx) => {
+                            {questions.filter((question) => survey.survey_type !== "kuis" || r.answers?.[question.id]).map((q, qIdx) => {
                               const answerData = r.answers[q.id];
                               const pointValue = isScored && answerData?.answer ? getAnswerScore(q, answerData.answer) : null;
                               return (
@@ -724,7 +770,9 @@ function ManageQuizContent() {
                     )}
                   </Card>
                 );
-              })}
+                  })}
+                </div>}
+              </section>)}
             </div>
           )}
         </div>
@@ -853,7 +901,7 @@ function ManageQuizContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-              <h3 className="font-bold text-slate-800">Edit Kuis</h3>
+              <h3 className="font-bold text-slate-800">Sunting Kuis</h3>
               <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
             <div className="overflow-y-auto p-6">

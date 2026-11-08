@@ -1,4 +1,5 @@
 "use client";
+import { userError } from "../../utils/indonesian";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -146,7 +147,7 @@ export default function AuthPage() {
     });
 
     if (error) {
-      setErrorMsg(error.message);
+      setErrorMsg(userError(error, "Gagal masuk. Periksa nama pengguna dan kata sandi Anda."));
       setLoading(false);
     } else {
       router.push("/dashboard");
@@ -164,7 +165,7 @@ export default function AuthPage() {
     const syntheticEmail = buildSyntheticEmailFromUsername(normalizedUsername);
 
     if (normalizedUsername.length < 3) {
-      setErrorMsg("Username minimal 3 karakter.");
+      setErrorMsg("Nama Pengguna minimal 3 karakter.");
       setLoading(false);
       return;
     }
@@ -176,7 +177,7 @@ export default function AuthPage() {
     }
 
     if (formData.password.length < 6) {
-      setErrorMsg("Password minimal 6 karakter.");
+      setErrorMsg("Kata Sandi minimal 6 karakter.");
       setLoading(false);
       return;
     }
@@ -253,9 +254,9 @@ export default function AuthPage() {
         authError.message === "Database error saving new user"
         || authError.message.toLowerCase().includes("already registered")
       ) {
-        setErrorMsg("Username atau email sudah digunakan. Silakan gunakan username lain.");
+        setErrorMsg("Nama Pengguna atau email sudah digunakan. Silakan gunakan username lain.");
       } else {
-        setErrorMsg(authError.message);
+        setErrorMsg(userError(authError, "Pendaftaran gagal. Periksa isian Anda lalu coba lagi."));
       }
       setLoading(false);
       return;
@@ -376,13 +377,13 @@ export default function AuthPage() {
             {isLogin ? (
               <div className="space-y-4 animate-fade-in">
                 <Input
-                  label="Username"
+                  label="Nama Pengguna"
                   placeholder="contoh: budi01"
                   value={formData.username}
                   onChange={(event) => setFormData({ ...formData, username: event.target.value })}
                 />
                 <Input
-                  label="Password"
+                  label="Kata Sandi"
                   type="password"
                   placeholder="******"
                   value={formData.password}
@@ -476,13 +477,13 @@ export default function AuthPage() {
                       onChange={(event) => setFormData({ ...formData, fullName: event.target.value })}
                     />
                     <Input
-                      label="Username"
+                      label="Nama Pengguna"
                       placeholder="contoh: budi01"
                       value={formData.username}
                       onChange={(event) => setFormData({ ...formData, username: event.target.value })}
                     />
                     <Input
-                      label="Password"
+                      label="Kata Sandi"
                       type="password"
                       placeholder="Minimal 6 karakter"
                       value={formData.password}

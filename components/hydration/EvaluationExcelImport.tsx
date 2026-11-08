@@ -7,6 +7,7 @@ import { Card, CardContent } from "../ui/Card";
 import { createClient } from "../../utils/api/client";
 import { MAX_IMPORT_BYTES, type ImportStudent } from "../../utils/hydrationExcel";
 import { buildEvaluationTemplate, parseEvaluationExcel, type Evaluation, type ImportEvaluation } from "../../utils/evaluationExcel";
+import { userError } from "../../utils/indonesian";
 
 async function loadEvaluations(): Promise<Evaluation[]> {
   const { data, error } = await createClient().from("surveys")
@@ -25,13 +26,14 @@ async function loadEvaluations(): Promise<Evaluation[]> {
 export function EvaluationExcelImport({ students, selectedDate, disabled = false, onBusyChange, onImported }: {
   students: ImportStudent[]; selectedDate: string; disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
-  onImported: (rows: ImportEvaluation[], added: number, skipped: number) => void;
+  onImported: (rows: ImportEvaluation[], added: number, skipped: number, updated: number) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<ImportEvaluation[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [actionError, setActionError] = useState("");
   const [fileName, setFileName] = useState("");
+  const [overwrite, setOverwrite] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const inFlight = useRef(false);
   const reset = () => { setPreview([]); setErrors([]); setActionError(""); setFileName(""); if (fileRef.current) fileRef.current.value = ""; };
@@ -49,7 +51,7 @@ export function EvaluationExcelImport({ students, selectedDate, disabled = false
       const anchor = document.createElement("a");
       anchor.href = url; anchor.download = "template-evaluasi-hidrasi.xlsx"; anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) { setActionError(error instanceof Error ? error.message : "Template gagal diunduh. Periksa koneksi lalu coba lagi."); }
+    } catch (error) { setActionError(userError(error, "Template gagal diunduh. Periksa koneksi lalu coba lagi.")); }
     finally { finish(); }
   };
   const readFile = async (file: File) => {
@@ -65,19 +67,20 @@ export function EvaluationExcelImport({ students, selectedDate, disabled = false
         new Promise<never>((_, reject) => { timeout = window.setTimeout(() => reject(new Error("Pembacaan file melewati batas waktu. Pilih ulang file lalu coba lagi.")), 30000); }),
       ]);
       setPreview(result.rows); setErrors(result.errors);
-    } catch (error) { setErrors([error instanceof Error ? error.message : "File gagal dibaca."]); }
+    } catch (error) { setErrors([userError(error, "File gagal dibaca.")]); }
     finally { window.clearTimeout(timeout); finish(); }
   };
   const importRows = async () => {
+    if (overwrite && !window.confirm("Timpa jawaban yang sudah tersimpan untuk siswa, evaluasi, dan tanggal dalam file ini? Periksa seluruh pratinjau terlebih dahulu.")) return;
     if (!preview.length || errors.length || !begin()) return;
     setActionError("");
     try {
-      const { data, error } = await createClient().rpc("submit_student_evaluations", { entries: preview.map((row) => ({ student_id: row.student_id, survey_id: row.survey_id, response_date: row.response_date, answers: row.answers })) });
+      const { data, error } = await createClient().rpc("submit_student_evaluations", { overwrite_existing: overwrite, entries: preview.map((row) => ({ student_id: row.student_id, survey_id: row.survey_id, response_date: row.response_date, answers: row.answers })) });
       if (error) throw error;
-      onImported(preview, data.added, data.skipped); reset();
+      onImported(preview, data.added, data.skipped, data.updated || 0); reset();
     } catch (error) {
       console.error("Evaluation import failed:", error);
-      const message = error && typeof error === "object" && "message" in error ? String(error.message) : "Periksa koneksi dan akses siswa.";
+      const message = userError(error, "Periksa koneksi dan akses siswa.");
       setActionError(`Impor belum dapat dikonfirmasi: ${message} Tidak ada penyimpanan sebagian. Unggah ulang aman; jawaban lama tidak akan ditimpa.`);
     } finally { finish(); }
   };
@@ -90,8 +93,10 @@ export function EvaluationExcelImport({ students, selectedDate, disabled = false
         <label htmlFor="evaluation-excel-file" className="mb-2 block text-sm font-semibold text-slate-700">Unggah evaluasi Excel (.xlsx)</label>
         <input id="evaluation-excel-file" ref={fileRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={disabled || busy || !students.length}
           onChange={(event) => { const file = event.target.files?.[0]; if (file) void readFile(file); }}
-          className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white p-2 text-sm file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-100 file:px-3 file:py-2 file:font-semibold file:text-indigo-800 disabled:opacity-50" />
-        <p className="mt-2 text-xs text-slate-500">Maksimal 500 evaluasi / 2 MB. Evaluasi yang sudah tersimpan pada tanggal yang sama dilewati, bukan ditimpa.</p>
+          className="sr-only" />
+        <label htmlFor="evaluation-excel-file" aria-disabled={disabled || busy || !students.length} className="inline-block cursor-pointer rounded-lg border bg-white px-3 py-2 text-sm font-semibold text-indigo-800">Pilih Berkas Evaluasi</label><span className="ml-2 break-all text-xs text-slate-500">{fileName || "Belum ada berkas dipilih"}</span>
+        <p className="mt-2 text-xs text-slate-500">Maksimal 500 evaluasi / 2 MB. Jawaban lama dilewati, kecuali Anda mengaktifkan pilihan timpa.</p>
+        <label className="mt-3 flex items-start gap-2 text-sm font-semibold text-indigo-800"><input type="checkbox" checked={overwrite} disabled={busy || disabled} onChange={(event) => setOverwrite(event.target.checked)} className="mt-1" />Timpa jawaban lama pada siswa, tanggal, dan evaluasi yang sama (untuk koreksi)</label>
       </div>
       {busy && <p role="status" className="text-sm font-semibold text-indigo-700">Memproses Excel, mohon tunggu...</p>}
       {actionError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{actionError}</p>}

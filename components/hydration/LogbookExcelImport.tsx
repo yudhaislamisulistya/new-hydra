@@ -1,10 +1,12 @@
 "use client";
+import { userError } from "../../utils/indonesian";
 
 import { useRef, useState } from "react";
 import { Download, FileSpreadsheet, Upload, X } from "lucide-react";
 import { Button } from "../ui/Button";
 import { Card, CardContent } from "../ui/Card";
 import { createClient } from "../../utils/api/client";
+import { Pagination } from "../ui/Pagination";
 import {
   buildImportPayload, buildLogbookTemplate, MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, parseLogbookExcel,
   type ImportLog, type ImportStudent,
@@ -22,6 +24,8 @@ export function LogbookExcelImport({ students, selectedDate, disabled, onBusyCha
   const [errors, setErrors] = useState<string[]>([]);
   const [actionError, setActionError] = useState("");
   const [fileName, setFileName] = useState("");
+  const [previewSearch, setPreviewSearch] = useState("");
+  const [previewPage, setPreviewPage] = useState(1);
   const fileRef = useRef<HTMLInputElement>(null);
   const inFlight = useRef(false);
 
@@ -82,7 +86,7 @@ export function LogbookExcelImport({ students, selectedDate, disabled, onBusyCha
       setPreview(result.rows);
       setErrors(result.errors);
     } catch (error) {
-      setErrors([error instanceof Error ? error.message : "File gagal dibaca. Gunakan template Hydra."]);
+      setErrors([userError(error, "File gagal dibaca. Gunakan template Hydra.")]);
     } finally {
       window.clearTimeout(timeout);
       finish();
@@ -109,6 +113,8 @@ export function LogbookExcelImport({ students, selectedDate, disabled, onBusyCha
   };
 
   const studentCount = new Set(preview.map((row) => row.student_id)).size;
+  const filteredPreview = preview.filter((row) => `${row.studentName} ${row.studentCode} ${row.date} ${row.period} ${row.drink_type} ${row.amount_ml}`.toLocaleLowerCase("id-ID").includes(previewSearch.trim().toLocaleLowerCase("id-ID")));
+  const safePreviewPage = Math.min(previewPage, Math.max(1, Math.ceil(filteredPreview.length / 20)));
   return (
     <Card className="border-cyan-200 bg-cyan-50/40">
       <CardContent className="space-y-4 p-5">
@@ -128,7 +134,8 @@ export function LogbookExcelImport({ students, selectedDate, disabled, onBusyCha
           <input ref={fileRef} id="logbook-excel-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             disabled={disabled || busy || !students.length}
             onChange={(event) => { const file = event.target.files?.[0]; if (file) void readFile(file); }}
-            className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-600 file:mr-2 file:rounded-lg file:border-0 file:bg-cyan-100 file:px-3 file:py-2 file:font-semibold file:text-cyan-800 disabled:opacity-50" />
+            className="sr-only" />
+          <label htmlFor="logbook-excel-file" aria-disabled={disabled || busy || !students.length} className="inline-block cursor-pointer rounded-lg border bg-white px-3 py-2 text-sm font-semibold text-cyan-800">Pilih Berkas Excel</label><span className="ml-2 break-all text-xs text-slate-500">{fileName || "Belum ada berkas dipilih"}</span>
           <p className="mt-2 text-xs text-slate-500">Maksimal {MAX_IMPORT_ROWS} catatan / 2 MB. Waktu minum menggunakan WIB. Impor menambah catatan; koreksi memakai Sunting/Hapus.</p>
         </div>
         {busy && <p role="status" className="text-sm font-semibold text-cyan-700">Memproses Excel, mohon tunggu...</p>}
@@ -151,15 +158,17 @@ export function LogbookExcelImport({ students, selectedDate, disabled, onBusyCha
               <p className="mt-1 text-xs text-slate-500">Total {preview.reduce((sum, row) => sum + row.amount_ml, 0)} ml. Baris impor yang sudah tersimpan akan diabaikan.</p>
             </div>
             <div tabIndex={0} aria-label="Pratinjau catatan Excel" className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
+              <input aria-label="Cari pratinjau logbook" placeholder="Cari siswa, tanggal, atau minuman..." value={previewSearch} onChange={(event) => { setPreviewSearch(event.target.value); setPreviewPage(1); }} className="m-2 rounded-lg border p-2 text-sm" />
               <table className="w-full text-left text-xs">
                 <thead className="bg-cyan-100 text-cyan-900"><tr>{["Baris", "Siswa", "Tanggal / Waktu", "Minuman", "ml"].map((title) => <th key={title} className="whitespace-nowrap p-3">{title}</th>)}</tr></thead>
-                <tbody>{preview.slice(0, 20).map((row) => <tr key={row.rowNumber} className="border-t border-slate-100">
+                <tbody>{filteredPreview.slice((safePreviewPage - 1) * 20, safePreviewPage * 20).map((row) => <tr key={row.rowNumber} className="border-t border-slate-100">
                   <td className="p-3">{row.rowNumber}</td><td className="p-3"><span className="font-semibold">{row.studentName}</span><br />{row.studentCode}</td>
                   <td className="whitespace-nowrap p-3">{row.date}<br />{row.period}</td><td className="min-w-32 p-3">{row.drink_type}</td><td className="p-3 text-right font-semibold">{row.amount_ml}</td>
                 </tr>)}</tbody>
               </table>
             </div>
-            {preview.length > 20 && <p className="text-xs text-slate-500">Menampilkan 20 dari {preview.length} catatan. Semua baris valid akan diproses.</p>}
+            <Pagination page={previewPage} total={filteredPreview.length} pageSize={20} onChange={setPreviewPage} />
+            <p className="text-xs text-slate-500">Pencarian hanya memfilter pratinjau. Semua {preview.length} baris valid dalam file akan diproses saat impor.</p>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outline" disabled={busy || disabled} onClick={reset} className="gap-1"><X size={16} /> Batal</Button>
               <Button type="button" className="flex-1 gap-2" disabled={busy || disabled || errors.length > 0} onClick={() => void importRows()}><Upload size={18} /> Impor {preview.length} Catatan</Button>

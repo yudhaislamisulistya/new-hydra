@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NEW HYDRA",
   description: "Deteksi Status Hidrasi untuk Anak Sekolah Dasar",
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
@@ -30,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="id"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

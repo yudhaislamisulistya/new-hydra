@@ -1,4 +1,5 @@
 "use client";
+import { getUserRoleLabel } from "../../utils/authIdentity";
 
 import { useUserStore } from "../../store/useUserStore";
 import { Bell, LogOut } from "lucide-react";
@@ -67,8 +68,8 @@ export function Header({ title }: { title: string }) {
           title="Buka profil"
         >
           <div className="flex flex-col items-end">
-            <span className="text-sm font-semibold text-slate-700">{profile?.nickname || "User"}</span>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{profile?.role || "GUEST"}</span>
+            <span className="text-sm font-semibold text-slate-700">{profile?.nickname || "Pengguna"}</span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{profile?.role ? getUserRoleLabel(profile.role) : "Tamu"}</span>
           </div>
           <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 font-bold border-2 border-white shadow-sm overflow-hidden">
             {profile?.nickname ? profile.nickname.charAt(0).toUpperCase() : "U"}

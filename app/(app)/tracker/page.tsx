@@ -22,6 +22,8 @@ import { getUserRoleLabel } from "../../../utils/authIdentity";
 import { DRINK_TYPES, TRACKER_PERIOD_HOURS, TRACKER_PERIOD_OPTIONS } from "../../../utils/hydrationLogbook";
 import { LogbookExcelImport } from "../../../components/hydration/LogbookExcelImport";
 import { EvaluationExcelImport } from "../../../components/hydration/EvaluationExcelImport";
+import { activityFor, loadDailyActivities } from "../../../utils/dailyActivity";
+import { userError } from "../../../utils/indonesian";
 
 const DRINK_VOLUMES = [100, 125, 150, 200, 250, 350, 500];
 const ACTIVITY_OPTIONS = [
@@ -100,6 +102,12 @@ export default function TrackerPage() {
   const [drinkType, setDrinkType] = useState("Air putih/air matang");
   const [volume, setVolume] = useState<number>(250);
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>("sedang");
+  const [loadedActivityKey, setLoadedActivityKey] = useState("");
+  const activityContextKey = `${selectedStudentId}:${selectedDate}`;
+  const activityLoading = loadedActivityKey !== activityContextKey;
+  const [activityError, setActivityError] = useState("");
+  const [activityEstimated, setActivityEstimated] = useState(true);
+  const activityMutation = useRef(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -116,6 +124,31 @@ export default function TrackerPage() {
     [selectedStudentId, students]
   );
   const selectedStudentName = selectedStudent?.name || "siswa";
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedStudentId) return;
+    loadDailyActivities([selectedStudentId], selectedDate).then((map) => {
+      if (!active) return;
+      setActivityLevel(activityFor(map, selectedStudentId, selectedDate));
+      setActivityEstimated(map[`${selectedStudentId}:${selectedDate}`]?.is_estimated ?? true);
+      setActivityError(""); setLoadedActivityKey(`${selectedStudentId}:${selectedDate}`);
+    }).catch((error) => { if (active) { setActivityError(userError(error, "Aktivitas harian gagal dimuat. Muat ulang halaman sebelum melanjutkan.")); setLoadedActivityKey(`${selectedStudentId}:${selectedDate}`); } });
+    return () => { active = false; };
+  }, [selectedStudentId, selectedDate]);
+
+  const saveActivity = async (level: ActivityLevel) => {
+    if (activityMutation.current || activityLoading || saving || !selectedStudentId) return;
+    activityMutation.current = true;
+    setSaving(true); setSaveError("");
+    try {
+      const { error } = await createClient().rpc("save_student_daily_activity", { student_id_input: selectedStudentId, date_input: selectedDate, level_input: level });
+      if (error) throw error;
+      setActivityLevel(level); setActivityEstimated(false); setActivityError("");
+      setSuccessMessage(`Aktivitas ${level} tersimpan untuk tanggal ${selectedDate}. Total kebutuhan dan kesimpulan hidrasi telah diperbarui.`);
+    } catch (error) { setSaveError(userError(error, "Pilihan aktivitas belum tersimpan. Silakan coba lagi.")); }
+    finally { activityMutation.current = false; setSaving(false); }
+  };
 
   useEffect(() => {
     async function fetchAccessibleStudents() {
@@ -158,9 +191,8 @@ export default function TrackerPage() {
         return;
       }
       const supabase = createClient();
-      const [year, month, day] = selectedDate.split("-").map(Number);
-      const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
-      const endOfDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+      const startOfDay = new Date(`${selectedDate}T00:00:00+07:00`);
+      const endOfDay = new Date(startOfDay.getTime() + 86400000);
 
       const { data, error } = await supabase
         .from("hydration_logs")
@@ -187,16 +219,8 @@ export default function TrackerPage() {
   }, [selectedDate, selectedStudentId, logsRevision]);
 
   const buildSelectedLoggedAtIso = useCallback((dateKey: string, periodKey: string) => {
-    const [year, month, day] = dateKey.split("-").map(Number);
-    const selectedDateTime = new Date(
-      year,
-      month - 1,
-      day,
-      TRACKER_PERIOD_HOURS[periodKey] ?? 8,
-      0,
-      0,
-      0
-    );
+    const hour = String(TRACKER_PERIOD_HOURS[periodKey] ?? 8).padStart(2, "0");
+    const selectedDateTime = new Date(`${dateKey}T${hour}:00:00+07:00`);
 
     return selectedDateTime.toISOString();
   }, []);
@@ -402,9 +426,9 @@ export default function TrackerPage() {
           selectedDate={selectedDate}
           disabled={saving || loadingStudents || Boolean(editingLog)}
           onBusyChange={(busy) => { mutationInFlight.current = busy; setSaving(busy); }}
-          onImported={(_, added, skipped) => {
+          onImported={(_, added, skipped, updated) => {
             setSaveError("");
-            setSuccessMessage(`${added} evaluasi berhasil disimpan. ${skipped} evaluasi yang sudah terisi dilewati. Jawaban dapat dilihat di menu evaluasi siswa pada tanggal yang sama.`);
+            setSuccessMessage(`${added} evaluasi baru disimpan, ${updated} dikoreksi, dan ${skipped} dilewati. Jawaban dapat dilihat pada tanggal catatan yang sama.`);
           }}
         />}
 
@@ -415,12 +439,14 @@ export default function TrackerPage() {
               <Activity size={18} className="text-blue-500" />
               <h3 className="font-bold text-slate-800 text-sm">Aktivitas Hari Ini</h3>
             </div>
-            <p className="text-xs text-slate-500 mb-3">Pilih aktivitas {profile?.role === "student" ? "kamu" : selectedStudentName} hari ini supaya kebutuhan minum bisa dihitung dengan tepat.</p>
+            <p className="text-xs text-slate-500 mb-3">Pilih aktivitas pada tanggal {selectedDate}. Pilihan tersimpan otomatis dan digunakan untuk Total Kebutuhan serta kesimpulan hidrasi pada semua ringkasan.</p>
+            <p role="status" className="mb-3 text-xs text-blue-700">{activityLoading ? "Memuat aktivitas..." : activityError || (activityEstimated ? "Belum ada pilihan tersimpan. Sedang adalah perkiraan awal; pilih aktivitas yang sebenarnya." : `Aktivitas ${activityLevel} sudah tersimpan.`)}</p>
             <div className="grid grid-cols-3 gap-2">
               {ACTIVITY_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => setActivityLevel(opt.value)}
+                  disabled={activityLoading || saving}
+                  onClick={() => void saveActivity(opt.value)}
                   className={`p-3 rounded-xl text-center transition-all ${
                     activityLevel === opt.value
                       ? "bg-blue-500 text-white shadow-md ring-2 ring-blue-300"
@@ -526,11 +552,11 @@ export default function TrackerPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-blue-500">Keseimbangan Cairan Tubuh {profile?.role === "student" ? "Kamu" : selectedStudentName}</p>
-                <h2 className="text-2xl font-extrabold text-slate-800 mt-1">{loadingLogs ? "Memuat..." : `${totalSelectedDate} / ${dailyTarget} ml`}</h2>
+                <h2 className="text-2xl font-extrabold text-slate-800 mt-1">{loadingLogs || activityLoading ? "Memuat..." : activityError ? "Aktivitas belum tersedia" : `${totalSelectedDate} / ${dailyTarget} ml`}</h2>
                 <p className="text-sm text-slate-500 mt-1">Kesimpulan membandingkan total asupan dengan Total Kebutuhan (FBB × FG + FA), bukan kebutuhan dasar (FBB).</p>
               </div>
               <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${adequacyStatus.className}`}>
-                {loadingLogs ? "Memuat..." : adequacyStatus.label}
+                {loadingLogs || activityLoading ? "Memuat..." : activityError ? "Belum dapat dinilai" : adequacyStatus.label}
               </span>
             </div>
 

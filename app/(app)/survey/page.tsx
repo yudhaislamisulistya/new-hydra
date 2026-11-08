@@ -12,6 +12,7 @@ import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
 import { formatLocalDateKey } from "../../../utils/hydrationCalc";
 import { EvaluationExcelImport } from "../../../components/hydration/EvaluationExcelImport";
+import { userError } from "../../../utils/indonesian";
 
 type QuizSummary = {
   id: string;
@@ -24,8 +25,10 @@ type QuizSummary = {
 };
 
 type SurveyResponseRow = {
+  id: string;
   survey_id: string;
   response_date: string;
+  answers: Record<string, {question_text: string; answer: string}> | null;
 };
 
 type SurveyQuestionRow = {
@@ -74,6 +77,8 @@ function SurveyContent() {
   const [excelBusy, setExcelBusy] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [responseRevision, setResponseRevision] = useState(0);
+  const [savedResponses, setSavedResponses] = useState<SurveyResponseRow[]>([]);
+  const [correcting, setCorrecting] = useState(false);
 
   // Quiz mode state
   const [activeSurvey, setActiveSurvey] = useState<QuizSummary | null>(null);
@@ -117,11 +122,12 @@ function SurveyContent() {
         // 2. Fetch responses linked to the selected hydration-log date
         const { data: responsesData, error: resError } = await supabase
           .from('survey_responses')
-          .select('survey_id, response_date')
+          .select('id, survey_id, response_date, answers')
           .or(`student_id.eq.${profile.id},and(student_id.is.null,respondent_id.eq.${profile.id})`)
-          .eq('response_date', responseDate);
+          .eq('response_date', responseDate).order('submitted_at', { ascending: false });
 
         if (resError) throw resError;
+        setSavedResponses((responsesData as SurveyResponseRow[]) || []);
 
         const completedIds = new Set<string>(((responsesData as SurveyResponseRow[] | null) || []).map((r) => r.survey_id));
         setCompletedResponseIds(completedIds);
@@ -137,6 +143,9 @@ function SurveyContent() {
   }, [profile?.id, responseDate, responseRevision]);
 
   const handleStartSurvey = async (survey: QuizSummary) => {
+    const previous = savedResponses.find((response) => response.survey_id === survey.id);
+    if (previous && !window.confirm("Isi ulang dan timpa jawaban evaluasi untuk tanggal catatan ini? Jawaban lama akan diperbarui saat Anda menyimpan.")) return;
+    setCorrecting(Boolean(previous));
     setLoadingQuiz(true);
     const supabase = createClient();
 
@@ -167,7 +176,7 @@ function SurveyContent() {
       setQuestionOptionOrders(nextOptionOrders);
       setActiveSurvey(survey);
       setCurrentIndex(0);
-      setAnswers({});
+      setAnswers(Object.fromEntries(Object.entries(previous?.answers || {}).map(([id, value]) => [id, value.answer])));
       setShowResult(false);
     } catch (err) {
       console.error("Error fetching questions:", err);
@@ -227,7 +236,7 @@ function SurveyContent() {
         };
       });
 
-      const { data, error } = await supabase.rpc('submit_student_evaluations', { entries: [{
+      const { data, error } = await supabase.rpc('submit_student_evaluations', { overwrite_existing: correcting, entries: [{
           survey_id: activeSurvey.id,
           student_id: profile.id,
           response_date: responseDate,
@@ -246,13 +255,14 @@ function SurveyContent() {
       setShowResult(true);
     } catch (err: unknown) {
       console.error("Error submitting response:", err);
-      alert(`Gagal mengirim jawaban: ${err instanceof Error ? err.message : "Terjadi kesalahan."}`);
+      alert(`Gagal mengirim jawaban: ${userError(err)}`);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleBackToList = () => {
+    setResponseRevision((value) => value + 1);
     setActiveSurvey(null);
     setQuestions([]);
     setQuestionOptionOrders({});
@@ -426,6 +436,8 @@ function SurveyContent() {
           </div>
           <ProgressBar progress={progress} />
 
+          {correcting && <Button type="button" disabled={submitting || questions.some((question) => !answers[question.id])} onClick={() => void submitResponses(answers)}>Simpan Koreksi Jawaban</Button>}
+
           <Card className="mt-6 shadow-sm border-0">
             <CardContent className="p-6 md:p-8 text-center min-h-[120px] flex items-center justify-center">
               <h3 className="text-lg font-bold text-slate-800 leading-snug">
@@ -477,8 +489,8 @@ function SurveyContent() {
           selectedDate={responseDate}
           disabled={loading || loadingQuiz}
           onBusyChange={setExcelBusy}
-          onImported={(_, added, skipped) => {
-            setImportMessage(`${added} evaluasi berhasil disimpan. ${skipped} evaluasi yang sudah terisi dilewati.`);
+          onImported={(_, added, skipped, updated) => {
+            setImportMessage(`${added} evaluasi baru disimpan, ${updated} dikoreksi, dan ${skipped} dilewati.`);
             setResponseRevision((revision) => revision + 1);
           }}
         />}
@@ -520,9 +532,12 @@ function SurveyContent() {
                   </div>
 
                   {isCompletedForDate ? (
-                    <div className="flex items-center gap-2 bg-green-100 px-3 py-2 rounded-lg">
+                    <div className="space-y-3 rounded-lg bg-green-100 px-3 py-2">
+                      <div className="flex items-center gap-2">
                       <CheckCircle2 size={16} className="text-green-600 shrink-0" />
                       <p className="text-xs font-semibold text-green-700">Sudah dikerjakan untuk tanggal catatan asupan ini.</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={excelBusy || loadingQuiz || submitting} onClick={() => void handleStartSurvey(survey)}>Isi Ulang / Timpa</Button><Button type="button" variant="danger" disabled={excelBusy || loadingQuiz || submitting} onClick={async () => { const response = savedResponses.find((item) => item.survey_id === survey.id); if (!response || !window.confirm("Hapus seluruh jawaban evaluasi ini pada tanggal catatan yang dipilih? Nilai dan XP terkait akan dihitung ulang.")) return; setSubmitting(true); try { const {error} = await createClient().rpc("delete_student_evaluation", {response_id_input: response.id, delete_all_for_day: true}); if (error) throw error; setResponseRevision((value) => value + 1); setImportMessage("Jawaban evaluasi berhasil dihapus."); } catch(error) { alert(userError(error, "Jawaban gagal dihapus.")); } finally { setSubmitting(false); } }}>Hapus</Button></div>
                     </div>
                   ) : (
                     <Button

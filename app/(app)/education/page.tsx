@@ -9,6 +9,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "../../../store/useUserStore";
 import { createClient } from "../../../utils/api/client";
+import { formatLocalDateKey } from "../../../utils/hydrationCalc";
+import { userError } from "../../../utils/indonesian";
 
 type SurveyType = "survey" | "pengetahuan" | "sikap" | "kuis";
 
@@ -79,6 +81,7 @@ function EducationCard({
   userId,
   isCompleted,
   onCompleted,
+  onDeleted,
   cumulativeDay,
   dayName,
 }: {
@@ -86,6 +89,7 @@ function EducationCard({
   userId: string;
   isCompleted: boolean;
   onCompleted: (surveyId: string) => void;
+  onDeleted: (surveyId: string) => void;
   cumulativeDay: number;
   dayName: string;
 }) {
@@ -97,6 +101,7 @@ function EducationCard({
   const [questionOptionOrders, setQuestionOptionOrders] = useState<Record<string, string[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [showResult, setShowResult] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
 
   const surveyType = material.survey_type || "survey";
   const isScored = surveyType === "pengetahuan" || surveyType === "sikap";
@@ -118,7 +123,9 @@ function EducationCard({
   const [todayQuestionNumber, setTodayQuestionNumber] = useState(1);
 
   const handleStartQuiz = async () => {
-    if (!material.survey_id || isCompleted) return;
+    if (!material.survey_id) return;
+    if (isCompleted && !window.confirm("Isi ulang dan timpa jawaban kuis pada tanggal hari ini saat menyimpan?")) return;
+    setCorrecting(isCompleted); setAnswers({}); setCurrentIndex(0);
 
     if (questions.length > 0) {
       setShowQuiz(true);
@@ -234,7 +241,7 @@ function EducationCard({
   };
 
   const submitResponses = async (finalAnswers: Record<string, string>) => {
-    if (!material.survey_id || !userId || isCompleted) return;
+    if (!material.survey_id || !userId) return;
 
     setSubmitting(true);
     const supabase = createClient();
@@ -248,22 +255,23 @@ function EducationCard({
         };
       });
 
-      const { error } = await supabase.from("survey_responses").insert({
+      const { error } = await supabase.rpc("submit_student_evaluations", { overwrite_existing: correcting, entries: [{
         survey_id: material.survey_id,
-        respondent_id: userId,
         student_id: userId,
+        response_date: formatLocalDateKey(new Date()),
         answers: answersPayload,
-      });
+      }] });
 
       if (error) throw error;
 
       onCompleted(material.survey_id);
+      setCorrecting(false);
       setShowQuiz(false);
       setShowResult(true);
       setQuestionOptionOrders({});
     } catch (error) {
       console.error("Error submitting education quiz:", error);
-      const errorMessage = error instanceof Error ? error.message : "Terjadi kesalahan.";
+      const errorMessage = userError(error);
       alert(`Gagal mengirim jawaban: ${errorMessage}`);
     } finally {
       setSubmitting(false);
@@ -339,7 +347,7 @@ function EducationCard({
           {material.survey_id && (
             <div className="mt-5">
               {isCompleted ? (
-                <div className="flex items-center gap-2 bg-green-100 px-3 py-3 rounded-lg">
+                <div className="space-y-3 bg-green-100 px-3 py-3 rounded-lg">
                   <CheckCircle2 size={18} className="text-green-600 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-green-700">
@@ -347,10 +355,11 @@ function EducationCard({
                     </p>
                     <p className="text-xs text-green-700/80 mt-0.5">
                       {isScored
-                        ? "Kuis untuk video ini tidak perlu diisi lagi."
+                        ? "Jawaban tersimpan. Anda dapat mengoreksi atau menghapus jika terjadi kesalahan."
                         : "Kuis untuk video ini sudah tercatat."}
                     </p>
                   </div>
+                  <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => void handleStartQuiz()} disabled={loadingQuiz || submitting}>Isi Ulang / Timpa</Button><Button type="button" variant="danger" disabled={loadingQuiz || submitting} onClick={async () => { if (!window.confirm("Hapus jawaban kuis ini untuk tanggal hari ini?")) return; setSubmitting(true); try { const {data,error} = await createClient().from("survey_responses").select("id").eq("survey_id",material.survey_id).or(`student_id.eq.${userId},and(student_id.is.null,respondent_id.eq.${userId})`).eq("response_date",formatLocalDateKey(new Date())).order("submitted_at",{ascending:false}).limit(1).maybeSingle(); if(error) throw error; if(data) { const result = await createClient().rpc("delete_student_evaluation",{response_id_input:data.id,delete_all_for_day:true}); if(result.error) throw result.error; } onDeleted(material.survey_id!); setCorrecting(false); setShowQuiz(false); setShowResult(false); } catch(error) {alert(userError(error,"Jawaban gagal dihapus."));} finally {setSubmitting(false);} }}>Hapus</Button></div>
                 </div>
               ) : (
                 <Button
@@ -367,7 +376,7 @@ function EducationCard({
         </CardContent>
       </Card>
 
-      {showQuiz && currentQuestion && !isCompleted && (
+      {showQuiz && currentQuestion && (!isCompleted || correcting) && (
         isKuis ? (
           /* ── MILLIONAIRE STYLE for kuis type ── */
           <div className="rounded-2xl overflow-hidden shadow-xl animate-fade-in-up">
@@ -608,9 +617,9 @@ export default function EducationPage() {
           const { data: responsesData, error: responsesError } = await supabase
             .from("survey_responses")
             .select("survey_id")
-            .eq("respondent_id", profile.id)
+            .or(`student_id.eq.${profile.id},and(student_id.is.null,respondent_id.eq.${profile.id})`)
             .in("survey_id", surveyIds)
-            .gte("submitted_at", todayStart.toISOString());
+            .eq("response_date", formatLocalDateKey(new Date()));
 
           if (responsesError) throw responsesError;
 
@@ -679,6 +688,7 @@ export default function EducationPage() {
               userId={profile.id}
               isCompleted={material.survey_id ? completedSurveyIds.has(material.survey_id) : false}
               onCompleted={handleCompletedSurvey}
+              onDeleted={(surveyId) => setCompletedSurveyIds((current) => { const next = new Set(current); next.delete(surveyId); return next; })}
               cumulativeDay={cumulativeDay}
               dayName={dayName}
             />

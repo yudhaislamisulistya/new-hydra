@@ -3,8 +3,8 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, ClipboardList, Activity, Droplets, PlaySquare, School2 } from "lucide-react";
 
 const navItems = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/users", label: "Daftar User", icon: Users },
+  { href: "/admin", label: "Dasbor", icon: LayoutDashboard },
+  { href: "/admin/users", label: "Daftar Pengguna", icon: Users },
   { href: "/admin/quizzes", label: "Kuis", icon: ClipboardList },
   { href: "/admin/education", label: "Edukasi & Video", icon: PlaySquare },
   { href: "/admin/schools", label: "Sekolah", icon: School2 },
@@ -19,7 +19,7 @@ export function Sidebar() {
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-screen sticky top-0 shrink-0 shadow-xl">
       <div className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
         <Droplets className="text-blue-500 mr-3" size={24} />
-        <span className="font-bold text-white text-lg tracking-wide">HYDRAS ADMIN</span>
+        <span className="font-bold text-white text-lg tracking-wide">HYDRA ADMIN</span>
       </div>
       
       <nav className="flex-1 py-6 px-3 space-y-1">

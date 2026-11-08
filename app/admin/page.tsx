@@ -7,6 +7,7 @@ import { Users, Droplets, ClipboardList, Activity } from "lucide-react";
 import { createClient } from "../../utils/api/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { calculateRequiredIntake, formatLocalDateKey, normalizeGender } from "../../utils/hydrationCalc";
+import { activityFor, loadDailyActivities } from "../../utils/dailyActivity";
 
 type RecentUser = {
   id: string;
@@ -112,12 +113,13 @@ export default function AdminDashboardPage() {
         const todayLogRows = (todayLogs as HydrationLogSummary[] | null) || [];
         const weeklyLogRows = (weeklyLogs as HydrationLogSummary[] | null) || [];
 
+        const activities = await loadDailyActivities(null, formatLocalDateKey(new Date()));
         const aggregateEstimatedNeed = studentProfileRows.reduce((total, student) => {
           const weight = student.weight_kg || 25;
           return total + calculateRequiredIntake({
             weight_kg: weight,
             gender: normalizeGender(student.gender),
-            activity_level: "sedang",
+            activity_level: activityFor(activities, student.id, formatLocalDateKey(new Date())),
           });
         }, 0);
 
@@ -210,7 +212,7 @@ export default function AdminDashboardPage() {
 
   return (
     <>
-      <AdminHeader title="Dashboard Admin" />
+      <AdminHeader title="Dasbor Admin" />
       <div className="p-8 space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           <Card className="border-0 shadow-md">

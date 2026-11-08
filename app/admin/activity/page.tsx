@@ -6,7 +6,9 @@ import { Card, CardContent } from "../../../components/ui/Card";
 import { createClient } from "../../../utils/api/client";
 import { Activity, ArrowRight, Target, Scale } from "lucide-react";
 import Link from "next/link";
-import { calculateBasicFluidNeeds, calculateStudentFluidTarget, getGenderFactor } from "../../../utils/hydrationCalc";
+import { calculateBasicFluidNeeds, calculateStudentFluidTarget, getGenderFactor, formatLocalDateKey } from "../../../utils/hydrationCalc";
+import { activityFor, loadDailyActivities } from "../../../utils/dailyActivity";
+import { fetchAllRows } from "../../../utils/dataAccess";
 
 type StudentRow = {
   id: string;
@@ -20,6 +22,9 @@ type StudentRow = {
   need_medium: number;
   need_high: number;
   today_hydration: number;
+  selected_need: number;
+  activity_level: string;
+  activity_estimated: boolean;
 };
 
 type StudentProfileDetails = {
@@ -40,22 +45,28 @@ export default function AdminActivityPage() {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [selectedDate, setSelectedDate] = useState(formatLocalDateKey(new Date()));
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const totalPages = Math.max(1, Math.ceil(students.length / STUDENTS_PER_PAGE));
+  const filteredStudents = students.filter((student) => `${student.full_name || ""} ${student.email || ""}`.toLocaleLowerCase("id-ID").includes(search.trim().toLocaleLowerCase("id-ID")));
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / STUDENTS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
-  const paginatedStudents = students.slice((safePage - 1) * STUDENTS_PER_PAGE, safePage * STUDENTS_PER_PAGE);
+  const paginatedStudents = filteredStudents.slice((safePage - 1) * STUDENTS_PER_PAGE, safePage * STUDENTS_PER_PAGE);
 
   useEffect(() => {
     async function fetchData() {
+      setLoading(true); setErrorMessage("");
       const supabase = createClient();
       try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = new Date(`${selectedDate}T00:00:00+07:00`);
+        const tomorrow = new Date(today.getTime() + 86400000);
+        const activities = await loadDailyActivities(null, selectedDate);
 
         const [{ data: studentsData, error: studentsError }, { data: studentDetails }, { data: todayLogs }] = await Promise.all([
           supabase.from("profiles").select("id, full_name, email").eq("role", "student").order("full_name", { ascending: true }),
           supabase.from("student_profiles").select("id, weight_kg, gender, daily_water_target_ml"),
-          supabase.from("hydration_logs").select("student_id, amount_ml").gte("logged_at", today.toISOString()),
+          fetchAllRows<TodayHydrationLog>((from, to) => supabase.from("hydration_logs").select("student_id, amount_ml").gte("logged_at", today.toISOString()).lt("logged_at", tomorrow.toISOString()).order("id").range(from, to)).then((data) => ({ data })),
         ]);
 
         if (studentsError) throw studentsError;
@@ -96,6 +107,9 @@ export default function AdminActivityPage() {
               need_medium: needMedium,
               need_high: needHigh,
               today_hydration: hydrationMap[student.id] || 0,
+              selected_need: calculateStudentFluidTarget(detail, activityFor(activities, student.id, selectedDate)),
+              activity_level: activityFor(activities, student.id, selectedDate),
+              activity_estimated: activities[`${student.id}:${selectedDate}`]?.is_estimated ?? true,
             };
           }
         );
@@ -103,29 +117,36 @@ export default function AdminActivityPage() {
         setStudents(merged);
       } catch (error) {
         console.error("Error fetching grouped activity:", error);
+        setErrorMessage("Aktivitas harian gagal dimuat. Silakan muat ulang halaman.");
       } finally {
         setLoading(false);
       }
     }
 
     void fetchData();
-  }, []);
+  }, [selectedDate]);
 
   const totalMlToday = students.reduce((total, student) => total + student.today_hydration, 0);
   const totalBaseNeed = students.reduce((total, student) => total + student.base_need, 0);
   const totalNeedLow = students.reduce((total, student) => total + student.need_low, 0);
   const totalNeedMedium = students.reduce((total, student) => total + student.need_medium, 0);
   const totalNeedHigh = students.reduce((total, student) => total + student.need_high, 0);
-  const avgProgress = totalNeedMedium > 0 ? Math.round((totalMlToday / totalNeedMedium) * 100) : 0;
+  const totalSelectedNeed = students.reduce((total, student) => total + student.selected_need, 0);
+  const avgProgress = totalSelectedNeed > 0 ? Math.round((totalMlToday / totalSelectedNeed) * 100) : 0;
 
   return (
     <>
       <AdminHeader title="Aktivitas Minum (Hidrasi)" />
       <div className="p-8 space-y-6">
+        <div className="flex flex-wrap items-end gap-4 rounded-xl bg-white p-4">
+          <label className="text-sm font-semibold text-slate-700">Tanggal aktivitas harian<input aria-label="Tanggal aktivitas harian" type="date" max={formatLocalDateKey(new Date())} value={selectedDate} onChange={(event) => { if (event.target.value) { setSelectedDate(event.target.value); setCurrentPage(1); } }} className="mt-2 block rounded-lg border p-2" /></label>
+          <label className="flex-1 text-sm font-semibold text-slate-700">Cari siswa<input aria-label="Cari aktivitas siswa" placeholder="Cari nama atau surel siswa..." value={search} onChange={(event) => { setSearch(event.target.value); setCurrentPage(1); }} className="mt-2 block w-full rounded-lg border p-2" /></label>
+        </div>
+        {errorMessage && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-700">{errorMessage}</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           <Card className="border-0 shadow-md bg-gradient-to-br from-blue-500 to-blue-600 text-white">
             <CardContent className="p-6">
-              <h3 className="text-blue-100 text-sm font-medium mb-1">Total Volume Hari Ini</h3>
+              <h3 className="text-blue-100 text-sm font-medium mb-1">Total Volume — {selectedDate}</h3>
               <p className="text-3xl font-bold">{(totalMlToday / 1000).toFixed(1)} Liter</p>
             </CardContent>
           </Card>
@@ -149,7 +170,7 @@ export default function AdminActivityPage() {
               </div>
               <div>
                 <h3 className="text-slate-500 text-sm font-medium">FBB × FG + FA</h3>
-                <p className="text-2xl font-bold text-slate-800">{totalNeedMedium.toLocaleString("id-ID")} ml</p>
+                <p className="text-2xl font-bold text-slate-800">{totalSelectedNeed.toLocaleString("id-ID")} ml</p>
                 <p className="text-[11px] text-slate-400 mt-1">
                   Rendah: {totalNeedLow.toLocaleString("id-ID")} • Sedang: {totalNeedMedium.toLocaleString("id-ID")} • Tinggi: {totalNeedHigh.toLocaleString("id-ID")}
                 </p>
@@ -176,7 +197,7 @@ export default function AdminActivityPage() {
               <div>
                 <h2 className="text-lg font-bold text-slate-800">Daftar Aktivitas per Siswa</h2>
                 <p className="text-sm text-slate-500 mt-1">
-                  FBB diambil dari data tabel siswa, lalu dihitung ulang dengan <strong>FG</strong> dan tiga variasi <strong>FA</strong>: rendah 0, sedang 275, tinggi 750.
+                  Kesimpulan menggunakan aktivitas yang tersimpan pada tanggal pilihan: rendah 0, sedang 375, tinggi 750 ml. Data yang belum dipilih ditandai sebagai perkiraan sedang.
                 </p>
               </div>
             </div>
@@ -189,8 +210,8 @@ export default function AdminActivityPage() {
                     <th scope="col" className="px-6 py-4">FBB</th>
                     <th scope="col" className="px-6 py-4">FG</th>
                     <th scope="col" className="px-6 py-4">FBB × FG + FA</th>
-                    <th scope="col" className="px-6 py-4">Status Hari Ini</th>
-                    <th scope="col" className="px-6 py-4">Progress (%)</th>
+                    <th scope="col" className="px-6 py-4">Status Tanggal Pilihan</th>
+                    <th scope="col" className="px-6 py-4">Progres (%)</th>
                     <th scope="col" className="px-6 py-4 text-right">Aksi</th>
                   </tr>
                 </thead>
@@ -210,8 +231,8 @@ export default function AdminActivityPage() {
                   ) : (
                     paginatedStudents.map((student) => {
                       const percentage =
-                        student.need_medium > 0
-                          ? Math.min(100, Math.round((student.today_hydration / student.need_medium) * 100))
+                        student.selected_need > 0
+                          ? Math.min(100, Math.round((student.today_hydration / student.selected_need) * 100))
                           : 0;
 
                       return (
@@ -229,7 +250,8 @@ export default function AdminActivityPage() {
                             <div className="text-xs text-slate-400">{student.gender === "female" || student.gender === "P" ? "Perempuan" : "Laki-laki"}</div>
                           </td>
                           <td className="px-6 py-4">
-                            <div className="font-bold text-slate-800">{student.need_medium.toLocaleString("id-ID")} ml</div>
+                            <div className="font-bold text-slate-800">{student.selected_need.toLocaleString("id-ID")} ml</div>
+                            <p className="text-xs text-blue-700">Aktivitas {student.activity_level}{student.activity_estimated ? " (perkiraan)" : " (tersimpan)"}</p>
                             <div className="text-xs text-slate-400">
                               Rendah: {student.need_low.toLocaleString("id-ID")} • Sedang: {student.need_medium.toLocaleString("id-ID")} • Tinggi: {student.need_high.toLocaleString("id-ID")}
                             </div>
@@ -239,7 +261,7 @@ export default function AdminActivityPage() {
                               <span className={`font-bold ${percentage >= 100 ? "text-green-600" : "text-blue-600"}`}>
                                 {student.today_hydration} ml
                               </span>
-                              <span className="text-xs text-slate-400">/ {student.need_medium} ml</span>
+                              <span className="text-xs text-slate-400">/ {student.selected_need} ml</span>
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -253,7 +275,7 @@ export default function AdminActivityPage() {
                           </td>
                           <td className="px-6 py-4 text-right">
                             <Link
-                              href={`/admin/activity-detail?id=${student.id}`}
+                              href={`/admin/activity-detail?id=${student.id}&date=${selectedDate}`}
                               className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
                             >
                               Lihat Detail <ArrowRight size={14} />
@@ -270,7 +292,7 @@ export default function AdminActivityPage() {
             {!loading && students.length > 0 && (
               <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row gap-3 justify-between items-center text-sm text-slate-500">
                 <span>
-                  Menampilkan {(safePage - 1) * STUDENTS_PER_PAGE + 1}–{Math.min(safePage * STUDENTS_PER_PAGE, students.length)} dari {students.length} siswa
+                  Menampilkan {filteredStudents.length ? (safePage - 1) * STUDENTS_PER_PAGE + 1 : 0}–{Math.min(safePage * STUDENTS_PER_PAGE, filteredStudents.length)} dari {filteredStudents.length} siswa
                 </span>
                 {totalPages > 1 && (
                   <div className="flex items-center gap-2">

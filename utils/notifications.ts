@@ -1,4 +1,5 @@
 import { createClient } from "./api/client";
+import { userError } from "./indonesian";
 
 export async function sendChildNotification(notification: {
   child_id: string;
@@ -36,5 +37,5 @@ export function getNotificationErrorMessage(error: unknown): string {
   if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) {
     return "Tidak dapat terhubung ke server. Periksa koneksi internet, lalu coba lagi.";
   }
-  return message || "Pengingat belum dapat dikirim. Silakan coba lagi.";
+  return userError(error, "Pengingat belum dapat dikirim. Silakan coba lagi.");
 }

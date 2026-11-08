@@ -1,4 +1,5 @@
 "use client";
+import { userError } from "../../../utils/indonesian";
 
 import { useEffect, useState } from "react";
 import { AdminHeader } from "../../../components/admin/AdminHeader";
@@ -130,7 +131,7 @@ export default function AdminEducationPage() {
       }
     } catch (error: any) {
       console.error("Error creating material:", error);
-      alert(`Gagal menyimpan video: ${error.message}`);
+      alert(`Gagal menyimpan video: ${userError(error)}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -149,7 +150,7 @@ export default function AdminEducationPage() {
       if (error) throw error;
       setMaterials(materials.filter(m => m.id !== id));
     } catch (error: any) {
-      alert(`Gagal menghapus: ${error.message}`);
+      alert(`Gagal menghapus: ${userError(error)}`);
     }
   };
 
@@ -202,7 +203,7 @@ export default function AdminEducationPage() {
         setEditingItem(null);
       }
     } catch (error: any) {
-      alert(`Gagal menyimpan perubahan: ${error.message}`);
+      alert(`Gagal menyimpan perubahan: ${userError(error)}`);
     } finally {
       setIsEditSubmitting(false);
     }
@@ -289,7 +290,7 @@ export default function AdminEducationPage() {
                         <button
                           onClick={() => handleOpenEdit(item)}
                           className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit Video"
+                          title="Sunting Video"
                         >
                           <Edit size={16} />
                         </button>
@@ -443,7 +444,7 @@ export default function AdminEducationPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-              <h3 className="font-bold text-slate-800">Edit Video Edukasi</h3>
+              <h3 className="font-bold text-slate-800">Sunting Video Edukasi</h3>
               <button onClick={() => setIsEditModalOpen(false)} className="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
 

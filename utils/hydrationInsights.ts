@@ -43,7 +43,7 @@ export function getDrinkBadge(drinkType: string | null) {
 
 export function getHydrationPeriod(dateInput: Date | string): HydrationPeriodKey {
   const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-  const hour = date.getHours();
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", hourCycle: "h23" }).format(date));
 
   if (hour < 11) return "pagi";
   if (hour < 15) return "siang";

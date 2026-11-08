@@ -1,0 +1,40 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Execute production TypeScript helpers with the existing compiler. */
+const assert = require("node:assert/strict"), fs = require("node:fs"), ts = require("typescript"), ExcelJS = require("exceljs");
+require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename,"utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText, filename);
+const { fetchAllRows } = require("../utils/dataAccess.ts");
+const { userError, responseDateTime } = require("../utils/indonesian.ts");
+const { calculateStudentFluidTarget, formatLocalDateKey, resolveHydrationDate } = require("../utils/hydrationCalc.ts");
+const { activityFor } = require("../utils/dailyActivity.ts");
+const { getAdequacyStatus } = require("../utils/hydrationInsights.ts");
+const { buildPersonalDataWorkbook } = require("../utils/personalDataExcel.ts");
+async function check() {
+  const source = Array.from({length:1234},(_,id)=>({id})), calls=[];
+  const rows = await fetchAllRows(async(from,to)=>{calls.push([from,to]);return {data:source.slice(from,to+1),error:null}});
+  assert.equal(rows.length,1234); assert.deepEqual(calls,[[0,499],[500,999],[1000,1499]]);
+  await assert.rejects(fetchAllRows(async()=>({data:null,error:{message:"test error"}})),error=>error.message === "test error");
+  assert.equal(userError({code:"invalid_credentials",message:"Invalid login credentials"}),"Nama pengguna atau kata sandi salah.");
+  assert.match(userError({message:"Failed to fetch"}),/Tidak dapat terhubung/);
+  assert.equal(userError({message:"internal database exception secret"}),"Terjadi kesalahan. Silakan coba lagi.");
+  assert.match(userError({message:"Tanggal evaluasi tidak valid."}),/^Tanggal/);
+  process.env.TZ="UTC";
+  assert.equal(formatLocalDateKey("2026-11-08T18:00:00Z"),"2026-11-09");
+  assert.match(responseDateTime("2026-10-18","2026-11-08T23:30:00Z"),/^18 Oktober 2026 06[.:]30 WIB$/);
+  for(const invalid of ["2026-02-30","not-a-date","2999-01-01",null]) assert.equal(resolveHydrationDate(invalid,"2026-11-08"),"2026-11-08");
+  const map={"student:2026-11-08":{activity_level:"rendah"},"student:2026-11-07":{activity_level:"tinggi"}};
+  const student={weight_kg:25,gender:"P"};
+  assert.equal(calculateStudentFluidTarget(student,activityFor(map,"student","2026-11-08")),1600);
+  assert.equal(calculateStudentFluidTarget(student,activityFor(map,"student","2026-11-07")),2350);
+  assert.equal(getAdequacyStatus(1900,calculateStudentFluidTarget(student,activityFor(map,"student","2026-11-08"))).isAdequate,true);
+  assert.equal(getAdequacyStatus(1900,calculateStudentFluidTarget(student,activityFor(map,"student","2026-11-07"))).isAdequate,false);
+  const buffer=await buildPersonalDataWorkbook({profiles:[{id:"child",role:"student",full_name:"Siswa A",username:"siswa",email:"siswa@example.invalid"},{id:"parent",role:"parent",full_name:"Orang Tua A",username:"ortu",email:"ortu@example.invalid"}],students:[{id:"child",student_code:"001",gender:"female",birth_date:"2015-01-01",weight_kg:25,height_cm:120,class_level:5,child_order:1,study_group:"control",school_id:"school"}],parents:[{id:"parent",gender:"male",age_years:35,education_level:"sma",occupation:"Petani",income_amount:0}],schools:[{id:"school",name:"SD Uji"}],links:[{parent_id:"parent",child_id:"child"}]});
+  const book=new ExcelJS.Workbook(); await book.xlsx.load(buffer);
+  assert.deepEqual(book.worksheets.map(s=>s.name),["Data Siswa","Data Orang Tua"]);
+  assert.equal(book.getWorksheet("Data Siswa").getCell("C2").value,"001");
+  assert.equal(book.getWorksheet("Data Siswa").getCell("L2").value,"Kontrol");
+  assert.equal(book.getWorksheet("Data Orang Tua").getCell("H2").value,0);
+  assert.equal(book.getWorksheet("Data Orang Tua").getCell("I2").value,"Siswa A (001)");
+  const icon=fs.readFileSync("app/favicon.ico"); assert.equal(icon.readUInt16LE(2),1);assert.equal(icon.readUInt32LE(18),22);assert.equal(icon.subarray(23,26).toString(),"PNG");
+  const sharp=require("sharp");for(const size of [192,512]) assert.equal((await sharp("public/icons/hydra-"+size+".png").metadata()).width,size);
+  console.log("PASS: full paged reads, Indonesian errors, WIB export dates, activity-based decisions, XLSX personal data and app icons");
+}
+check().catch(error=>{console.error(error);process.exitCode=1});

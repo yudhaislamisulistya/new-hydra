@@ -27,7 +27,7 @@ export function AdminHeader({ title }: { title: string }) {
 
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-end">
-            <span className="text-sm font-semibold text-slate-700">{profile?.nickname || "Admin User"}</span>
+            <span className="text-sm font-semibold text-slate-700">{profile?.nickname || "Admin"}</span>
             <span className="text-[10px] text-slate-400 uppercase tracking-wider">Administrator</span>
           </div>
           <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-white font-bold border-2 border-slate-100 shadow-sm overflow-hidden">

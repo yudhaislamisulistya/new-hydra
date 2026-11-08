@@ -64,6 +64,38 @@ Health checks:
     curl -fsS http://127.0.0.1:7108/auth/v1/health
     curl -fsS 'http://127.0.0.1:7108/rest/v1/schools?select=id&limit=1'
 
+## Revisi 8 November 2026
+
+Sebelum membangun ulang frontend, cadangkan database lalu jalankan migrasi terbaru:
+
+    docker exec -i hydra_postgres_db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < database/migrations/20261108_daily_activity_and_evaluation_corrections.sql
+
+Migrasi menyimpan aktivitas per siswa/tanggal, menambahkan jejak koreksi evaluasi,
+dan menyediakan RPC untuk timpa/hapus dengan pemeriksaan akses siswa. Entri lama
+yang tidak memiliki aktivitas diberi **perkiraan sedang**, bukan aktivitas acak.
+Pilihan siswa/guru/orang tua/admin yang disimpan menggantikan perkiraan tersebut.
+Total kebutuhan tetap memakai rumus aplikasi FBB × FG + FA (0/375/750 ml).
+
+Admin dapat menyunting/menghapus entri pada riwayat yang dikelompokkan per siswa.
+Siswa dapat mengisi ulang/menghapus evaluasi pada tanggal catatan yang dipilih;
+impor Excel menyediakan pilihan **Timpa jawaban lama** dengan konfirmasi.
+Identitas pengisi asli dan waktu pengiriman tetap disimpan; koreksi mencatat
+`updated_by`/`updated_at`. Tanggal pada kedua kolom ekspor mengikuti tanggal
+catatan asupan; jam menggunakan WIB. Timestamp asli tidak dimodifikasi.
+
+**Daftar Pengguna → Unduh Data Siswa & Orang Tua (.xlsx)** menghasilkan dua
+lembar berisi seluruh data (bukan hanya halaman aktif). File berisi data pribadi;
+hanya admin yang dapat mengunduh dan file harus disimpan secara terbatas.
+
+Ikon baru tersedia untuk favicon, Apple Touch, PWA, dan sumber launcher Android.
+Prompt dan asal ikon: `public/icons/README.md`. Perubahan sumber Android tidak
+otomatis memperbarui APK yang sudah terpasang; APK perlu dibangun ulang.
+
+Pengujian tambahan:
+
+    npm run test:november-revisions
+    docker exec -i hydra_postgres_db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < database/tests/daily_activity_and_evaluation_corrections.sql
+
 database/auth-data.sql contains password hashes and is excluded from Git.
 The pre-migration volume new-hydra_hydra_postgres_data and a validated backup
 in /home/new-hydra-backups are retained for rollback. Do not delete them until
